@@ -3,11 +3,16 @@ mutable struct testProblem
     model::AbstractNLPModel
     meta::NLPModelMeta #the NLP meta of the NLP model above
 
-    weigthCalls::Number
+    weightCalls::Number
 
     function testProblem(model)
-        weigthCalls=0
-        new(model,model.meta,weigthCalls)
+        weightCalls=0
+        try
+            typeof(model.meta)==NLPModelMeta
+        catch
+            error("NLP model used to construct testProblem needs to have field meta of type NLPModelMeta")
+        end
+        new(model,model.meta,weightCalls)
     end
 end
 
@@ -18,20 +23,20 @@ mutable struct tunedOptimizer
     hyperparam_low_bound::Vector{Float64}
     hyperparam_up_bound::Vector{Float64}
     param_cstr::Vector{Function}
-    run::Function #should take as arguments an NLP model and a vector of hyperparameters
-                  #should return a tuple (calls,success)
+    run::Function #should take as arguments an NLP model, a vector of hyperparameters and the maximum number of function calls allowed
+                  #should return the number of function calls needed (Inf if the optimization failed)
 
     function tunedOptimizer(run,nb_hyperparam)
-        name="noname"
-        hyperparam_low_bound=[]
-        hyperparam_up_bound=[]
+        name="nonamesolver"
+        hyperparam_low_bound=zeros(Float64,nb_hyperparam)
+        hyperparam_up_bound=ones(Float64,nb_hyperparam)
         param_cstr=Vector{Function}()
         new(name,nb_hyperparam,hyperparam_low_bound,hyperparam_up_bound,param_cstr,run)
     end
 end
 
-function runtopt(solver::tunedOptimizer,pb::testProblem,x::AbstractVector)
-    funcCalls=solver.run(pb.model,x)
+function runtopt(solver::tunedOptimizer,pb::testProblem,x::AbstractVector; maxFactor::Number=Inf)
+    funcCalls=solver.run(pb.model,x, maxFactor*pb.weightCalls)
     NLPModels.reset!(pb.model)
     return funcCalls
 end
@@ -43,21 +48,27 @@ struct tuningProblem <: AbstractNLPModel
   f :: Function
   c :: Function
 
-  function tuningProblem(solver::tunedOptimizer,Pbs::Vector{testProblem};weights=true,fail_penalty=Inf,x0=[],lvar=[],uvar=[])
+  function tuningProblem(solver::tunedOptimizer,Pbs::Vector{testProblem};weights=true,x0=[],lvar=[],uvar=[],maxFactor=Inf,penaltyFactor=1,admitted_failure=0.0)
 
       function f(x)
           total_calls = 0
+          failure=0
           for pb in Pbs
-              funcCalls=runtopt(solver,pb,x)
-              if funcCalls<Inf
-                  total_calls += funcCalls/(weights ? pb.weigthCalls : 1)
-              elseif fail_penalty<Inf
-                  total_calls += fail_penalty/(weights ? pb.weigthCalls : 1)
+              funcCalls=runtopt(solver,pb,x;maxFactor=maxFactor)
+              if funcCalls<maxFactor*pb.weightCalls
+                  total_calls += funcCalls/(weights ? pb.weightCalls : 1)
+              elseif weights && admitted_failure>0 && maxFactor<Inf && penaltyFactor<Inf
+                  total_calls += penaltyFactor*maxFactor
+                  failure+=1
               else
                   return Inf
               end
           end
-          return total_calls
+          if failure/length(Pbs)>admitted_failure
+              return Inf
+          else
+              return total_calls
+          end
       end
 
       function c(x)

@@ -11,9 +11,8 @@ using CSV, DataFrames, ProgressMeter
 -> return useful information about the executed heuristic.
 
 During heuristic, for a given set of hyperparameters, all problems from `Pbs` will be run and the returned function calls numbers will be sumed.
-If only one of the problems fails, then the set of hyperparameters
-is abandoned and the sumed number of function calls set to +Inf. Also note that function calls numbers are inversely weighted with the minimal
-number of function calls of the given problem (`optProblem.weigthCalls`) before being sumed.
+Note that function calls numbers are inversely weighted with the minimal number of function calls of the given problem (`optProblem.weightCalls`)
+before being sumed.
 
 # **Outputs** :
 
@@ -34,6 +33,10 @@ Bounds for hyperparameters outside of which all optimization processes failed (l
 Same (upper bound)
 
 # **Optional arguments** :
+
+- `grid::Bool`
+
+Size of the grid used for the heuristic (the tuningProblem will be evaluated (grid x grid) times).
 
 - `log::Bool`
 

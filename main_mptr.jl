@@ -8,8 +8,8 @@ include("metaoptimization.jl")
 include("write_csv.jl")
 
 #function to run mptr on a given problem
-function runMPTR(model::T, hyperparameters) where T<:AbstractNLPModel
-    (solved,funcCalls,gNorms)=mptr_nomad(model,hyperparameters[1],hyperparameters[2])
+function runMPTR(model::T, hyperparameters, maxCalls) where T<:AbstractNLPModel
+    (solved,funcCalls,gNorms)=mptr_nomad(model,hyperparameters[1],hyperparameters[2], maxCalls)
     return (solved ? funcCalls : Inf)
 end
 
@@ -42,46 +42,46 @@ end
 n=10
 
 Arwhead = testProblem(arwhead(n))
-Arwhead.weigthCalls = 106
+Arwhead.weightCalls = 106
 
 Cosine = testProblem(cosine(n))
-Cosine.weigthCalls = 569
+Cosine.weightCalls = 569
 
 Dqrtic = testProblem(dqrtic(n))
-Dqrtic.weigthCalls = 954
+Dqrtic.weightCalls = 954
 
 Edensch = testProblem(edensch(n))
-Edensch.weigthCalls = 228
+Edensch.weightCalls = 228
 
 Eg2 = testProblem(eg2(n))
-Eg2.weigthCalls = 67
+Eg2.weightCalls = 67
 
 Extrosnb = testProblem(extrosnb(n))
-Extrosnb.weigthCalls = 27044
+Extrosnb.weightCalls = 27044
 
 Fletchcr = testProblem(fletchcr(n))
-Fletchcr.weigthCalls = 279
+Fletchcr.weightCalls = 279
 
 Freuroth = testProblem(freuroth(n))
-Freuroth.weigthCalls = 515
+Freuroth.weightCalls = 515
 
 Genhumps = testProblem(genhumps(n))
-Genhumps.weigthCalls = 9234
+Genhumps.weightCalls = 9234
 
 Genrose = testProblem(genrose(n))
-Genrose.weigthCalls = 1198
+Genrose.weightCalls = 1198
 
 Nondquar = testProblem(nondquar(n))
-Nondquar.weigthCalls = 1473
+Nondquar.weightCalls = 1473
 
 Schmvett = testProblem(schmvett(n))
-Schmvett.weigthCalls = 560
+Schmvett.weightCalls = 560
 
 Sinquad = testProblem(sinquad(n))
-Sinquad.weigthCalls = 15423
+Sinquad.weightCalls = 15423
 
 Vardim = testProblem(vardim(n))
-Vardim.weigthCalls = 138
+Vardim.weightCalls = 138
 
 #Pbs = [Vardim]
 
@@ -91,4 +91,4 @@ Pbs = [Arwhead, Cosine, Dqrtic,  Edensch, Eg2 ,Extrosnb, Fletchcr, Freuroth ,Gen
 
 #println(runtopt(MPTRstruct,Genhumps,[1e-1,1e-8]))
 
-metaoptimization(Pbs,MPTRstruct,runNOMAD,MATLAB_path;pre_heuristic=true)
+metaoptimization(Pbs,MPTRstruct,runNOMAD,MATLAB_path;pre_heuristic=false,maxFactor=5,penaltyFactor=1,admitted_failure=0.2)
