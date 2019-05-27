@@ -1,6 +1,6 @@
 """
 
-metaoptimization(Pbs::Vector{testProblem},solver::tunedOptimizer,runBBoptimizer::Function,data_path::String;
+metaoptimization(Pbs::Vector{AbstractNLPModel},solver::tunedOptimizer,runBBoptimizer::Function,data_path::String;
                             grid::Int=20, log::Bool=true,recompute_weights::Bool=false,pre_heuristic::Bool=true,
                             hyperparam_x0::Vector{Number}=[],hyperparam_lb::Vector{Number}=[],
                             hyperparam_ub::Vector{Number}=[],fail_penalty::Number=Inf)
@@ -12,7 +12,7 @@ good initialization point along with a bounding box for the optimization.
 
 # **Arguments** :
 
-- `Pbs::Vector{testProblem}`
+- `Pbs::Vector{AbstractNLPModel}`
 
 The set of testProblems used for the hyperparameters optimization. The cost to minimize will be the sum of the numbers of
 function calls needed to solve them
@@ -65,7 +65,7 @@ point will be the attribute hyperparam_up_bound from the tunedOptimizer object p
 
 - `maxFactor::Number`
 
-A testProblem optimization will be considered as failed if the number of function calls exceed maxFactor*weightCalls.
+A NLP model optimization will be considered as failed if the number of function calls exceed maxFactor*weightCalls.
 
 - `penaltyFactor::Number`
 
@@ -80,19 +80,22 @@ to Inf.
 
 """
 
-function metaoptimization(Pbs::Vector{testProblem},solver::tunedOptimizer,runBBoptimizer::Function,data_path::String;
+function metaoptimization(Pbs::Vector{T},solver::tunedOptimizer,runBBoptimizer::Function,data_path::String;
                             grid::Int=20, log::Bool=true,recompute_weights::Bool=false,pre_heuristic::Bool=true,
                             hyperparam_x0=Vector{Number}(),hyperparam_lb=Vector{Number}(), hyperparam_ub=Vector{Number}(),
-                            maxFactor::Number=Inf, penaltyFactor::Number=1,admitted_failure::Number=0.1)
+                            maxFactor::Number=Inf, penaltyFactor::Number=1,admitted_failure::Number=0.1) where T<:AbstractNLPModel
 
     min_guess = false
     for pb in Pbs
-        if recompute_weights || pb.weightCalls==0
-            min_guess || ((@info "start guessing weightCalls for each problem...") && (min_guess=true))
+        if recompute_weights || !(haskey(solver.weightCalls,pb.meta.name))
+            if !min_guess
+                @info "start guessing weightCalls for each problem..."
+                min_guess=true
+            end
             tpb_csv = tuningProblem(solver,[pb];weights=false)
             (hyperparam_init, minCalls, guess_low_bound, guess_up_bound) = write_csv(tpb_csv,data_path;grid=grid,log=log)
-            pb.weightCalls=minCalls
-            println("weightCalls = $(pb.weightCalls)")
+            solver.weightCalls[pb.meta.name]=minCalls
+            println("weightCalls = $(solver.weightCalls[pb.meta.name])")
         end
     end
     min_guess ? (@info "all weightCalls guessed.\n") : (@info "all weightCalls already available.\n")
@@ -120,10 +123,10 @@ function metaoptimization(Pbs::Vector{testProblem},solver::tunedOptimizer,runBBo
     println("\nhyperparameters found after optimization : $(argmin)")
     for pb in Pbs
         optCalls = runtopt(solver,pb,argmin)
-        if optCalls<maxFactor*pb.weightCalls
+        if optCalls<maxFactor*solver.weightCalls[pb.meta.name]
             println(pb.meta.name * " : $optCalls calls")
         else
-            println(pb.meta.name * " : failure (maxCalls = $(maxFactor*pb.weightCalls))")
+            println(pb.meta.name * " : failure (maxCalls = $(maxFactor*solver.weightCalls[pb.meta.name]))")
         end
     end
 

@@ -11,8 +11,8 @@ using CSV, DataFrames, ProgressMeter
 -> return useful information about the executed heuristic.
 
 During heuristic, for a given set of hyperparameters, all problems from `Pbs` will be run and the returned function calls numbers will be sumed.
-Note that function calls numbers are inversely weighted with the minimal number of function calls of the given problem (`optProblem.weightCalls`)
-before being sumed.
+Note that function calls numbers are inversely weighted with the minimal number of function calls of the given problem (saved in
+dictionary `solver.weightCalls`) before being sumed.
 
 # **Outputs** :
 

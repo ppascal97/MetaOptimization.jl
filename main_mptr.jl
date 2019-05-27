@@ -20,7 +20,20 @@ MPTRstruct.name="mptr"
 MPTRstruct.param_cstr=[c]
 MPTRstruct.hyperparam_low_bound=[eps(Float32),eps(Float64)]
 MPTRstruct.hyperparam_up_bound=[1,1]
-#These bounds will not be used during optimization because preliminary heuristic provides better bounds
+MPTRstruct.weightCalls=Dict("arwhead" => 106,
+                            "cosine" => 569,
+                            "dqrtic" => 954,
+                            "edensch" => 228,
+                            "eg2" => 67,
+                            "extrosnb" => 27044,
+                            "fletchcr" => 279,
+                            "freuroth" => 515,
+                            "genhumps" => 9234,
+                            "genrose" => 1198,
+                            "nondquar" => 1473,
+                            "schmvett" => 560,
+                            "sinquad" => 15423,
+                            "vardim" => 138)
 
 function runNOMAD(model::T) where T<:AbstractNLPModel
     param = nomadParameters(model.meta.x0,["OBJ","EB"])
@@ -41,54 +54,12 @@ end
 
 n=10
 
-Arwhead = testProblem(arwhead(n))
-Arwhead.weightCalls = 106
-
-Cosine = testProblem(cosine(n))
-Cosine.weightCalls = 569
-
-Dqrtic = testProblem(dqrtic(n))
-Dqrtic.weightCalls = 954
-
-Edensch = testProblem(edensch(n))
-Edensch.weightCalls = 228
-
-Eg2 = testProblem(eg2(n))
-Eg2.weightCalls = 67
-
-Extrosnb = testProblem(extrosnb(n))
-Extrosnb.weightCalls = 27044
-
-Fletchcr = testProblem(fletchcr(n))
-Fletchcr.weightCalls = 279
-
-Freuroth = testProblem(freuroth(n))
-Freuroth.weightCalls = 515
-
-Genhumps = testProblem(genhumps(n))
-Genhumps.weightCalls = 9234
-
-Genrose = testProblem(genrose(n))
-Genrose.weightCalls = 1198
-
-Nondquar = testProblem(nondquar(n))
-Nondquar.weightCalls = 1473
-
-Schmvett = testProblem(schmvett(n))
-Schmvett.weightCalls = 560
-
-Sinquad = testProblem(sinquad(n))
-Sinquad.weightCalls = 15423
-
-Vardim = testProblem(vardim(n))
-Vardim.weightCalls = 138
-
 #Pbs = [Vardim]
 
-Pbs = [Arwhead, Cosine, Dqrtic,  Edensch, Eg2 ,Extrosnb, Fletchcr, Freuroth ,Genhumps, Genrose, Nondquar, Schmvett , #=Sinquad,=# Vardim]
+Pbs = [arwhead(n), cosine(n), dqrtic(n),  edensch(n), eg2(n) ,extrosnb(n), fletchcr(n), freuroth(n) ,genhumps(n), genrose(n), nondquar(n), schmvett(n) , #=sinquad(n),=# vardim(n)]
 
 #pb=Vardim;plot_grad_mptr(pb.cost,[0.01,0.001])
 
 #println(runtopt(MPTRstruct,Genhumps,[1e-1,1e-8]))
 
-metaoptimization(Pbs,MPTRstruct,runNOMAD,MATLAB_path;pre_heuristic=false,maxFactor=5,penaltyFactor=1,admitted_failure=0.2)
+metaoptimization(Pbs,MPTRstruct,runNOMAD,MATLAB_path;pre_heuristic=true,maxFactor=7,penaltyFactor=1,admitted_failure=0.3)
