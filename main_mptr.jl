@@ -9,8 +9,12 @@ include("write_csv.jl")
 
 #function to run mptr on a given problem
 function runMPTR(model::T, hyperparameters, maxCalls) where T<:AbstractNLPModel
-    (solved,funcCalls,gNorms)=mptr_nomad(model,hyperparameters[1],hyperparameters[2], maxCalls)
-    return (solved ? funcCalls : Inf)
+    try
+        (solved,funcCalls,gNorms)=mptr_nomad(model,hyperparameters[1],hyperparameters[2], maxCalls)
+        return (solved ? funcCalls : Inf)
+    catch
+        return Inf
+    end
 end
 
 c(x)=x[2]-x[1]
@@ -58,8 +62,12 @@ n=10
 
 Pbs = [arwhead(n), cosine(n), dqrtic(n),  edensch(n), eg2(n) ,extrosnb(n), fletchcr(n), freuroth(n) ,genhumps(n), genrose(n), nondquar(n), schmvett(n) , #=sinquad(n),=# vardim(n)]
 
+#=All_pbs = [arglina(n), arglinb(n), arglinc(n), arwhead(n), bdqrtic(n), beale(n), broydn7d(n), brybnd(n), chainwoo(n), chnrosnb_mod(n), cosine(n), cragglvy(n), dixmaane(n), dixmaani(n), dixmaanm(n), dixon3dq(n), dqdrtic(n), dqrtic(n), edensch(n), eg2(n), engval1(n), errinros_mod(n), extrosnb(n), fletcbv2(n), fletcbv3_mod(n), fletchcr(n),
+                      freuroth(n), genhumps(n), genrose(n), genrose_nash(n), indef_mod(n), liarwhd(n), morebv(n), ncb20(n), ncb20b(n), noncvxu2(n), noncvxun(n), nondia(n), nondquar(n), NZF1(n), penalty2(n), penalty3(n), powellsg(n), power(n), quartc(n), sbrybnd(n), schmvett(n), scosine(n), sparsine(n), sparsqur(n), srosenbr(n), sinquad(n), tointgss(n), tquartic(n), tridia(n), vardim(n), woods(n)]
+=#
+
 #pb=Vardim;plot_grad_mptr(pb.cost,[0.01,0.001])
 
 #println(runtopt(MPTRstruct,Genhumps,[1e-1,1e-8]))
 
-metaoptimization(Pbs,MPTRstruct,runNOMAD,MATLAB_path;pre_heuristic=true,maxFactor=7,penaltyFactor=1,admitted_failure=0.3)
+metaoptimization(Pbs,MPTRstruct,runNOMAD,MATLAB_path;pre_heuristic=true,maxFactor=5,penaltyFactor=1,admitted_failure=0.2)
