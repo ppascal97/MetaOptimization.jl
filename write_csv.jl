@@ -71,7 +71,7 @@ function write_csv(tpb::tuningProblem,data_path::String;grid::Int=20,log::Bool=f
             Y = collect(0:(grid-1))*(UB[2]-LB[2])/(grid-1) + fill(LB[2],grid)
         end
 
-        p = Progress(grid^2, 0.1,"$(tpb.meta.name) running... ")
+        p = Progress(grid^2, 0.1,"heuristic running... ")
 
         minCalls=Inf
         best_hyperparam = Vector{Float64}(undef,tpb.meta.nvar)
@@ -85,6 +85,10 @@ function write_csv(tpb::tuningProblem,data_path::String;grid::Int=20,log::Bool=f
             for j=1:grid
 
                 (obj,cstr)=objcons(tpb,[X[i],Y[j]])
+
+                if tpb.admit_failure && cstr[end]>0
+                    obj=Inf
+                end
 
                 column[j]=obj
 

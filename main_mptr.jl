@@ -4,6 +4,7 @@ MATLAB_path = "/home/pascpier/Documents/MATLAB"
 
 include("/home/pascpier/Documents/mptr/mptr_nomad.jl")
 include("structs.jl")
+include("weighting.jl")
 include("metaoptimization.jl")
 include("write_csv.jl")
 
@@ -24,32 +25,27 @@ MPTRstruct.name="mptr"
 MPTRstruct.param_cstr=[c]
 MPTRstruct.hyperparam_low_bound=[eps(Float32),eps(Float64)]
 MPTRstruct.hyperparam_up_bound=[1,1]
-MPTRstruct.weightCalls=Dict("arwhead" => 106,
-                            "cosine" => 569,
-                            "dqrtic" => 954,
-                            "edensch" => 228,
-                            "eg2" => 67,
-                            "extrosnb" => 27044,
-                            "fletchcr" => 279,
-                            "freuroth" => 515,
-                            "genhumps" => 9234,
-                            "genrose" => 1198,
-                            "nondquar" => 1473,
-                            "schmvett" => 560,
-                            "sinquad" => 15423,
-                            "vardim" => 138)
+MPTRstruct.weightCalls=Dict("arglina_10" => 67, "arglinb_10" => 57, "arglinc_10" => 57, "bdqrtic_100" => 410,
+                            "arwhead_10" => 106, "cosine_10" => 569, "dqrtic_10" => 954, "edensch_10" => 228,
+                            "eg2_10" => 67, "extrosnb_10" => 27044, "fletchcr_10" => 279, "freuroth_10" => 515,
+                            "genhumps_10" => 9234, "genrose_10" => 1198, "nondquar_10" => 1473, "schmvett_10" => 560,
+                            "sinquad_10" => 15423, "vardim_10" => 138)
 
 function runNOMAD(model::T) where T<:AbstractNLPModel
-    param = nomadParameters(model.meta.x0,["OBJ","EB"])
+    param = nomadParameters(model.meta.x0,["OBJ","EB","EB"])
     param.lower_bound = model.meta.lvar
     param.upper_bound = model.meta.uvar
-    param.LH_init=0
+    param.LH_init=400
     function eval(x)
-        (obj,cstr)=objcons(model,x)
-        if obj<Inf
-            return (true,true,[obj,cstr[1]])
+        (f,c)=objcons(model,x)
+        if f<Inf
+            return (true, true, [f,c[1],c[2]])
         else
-            return (false,true,[Inf,Inf])
+            if x==model.meta.x0
+                return (true, false, [Inf,Inf,Inf])
+            else
+                return (false, false, [Inf,Inf,Inf])
+            end
         end
     end
     result=nomad(eval,param)
@@ -58,16 +54,13 @@ end
 
 n=10
 
-#Pbs = [Vardim]
+Pbs = [vardim(n),cosine(n)]
 
-Pbs = [arwhead(n), cosine(n), dqrtic(n),  edensch(n), eg2(n) ,extrosnb(n), fletchcr(n), freuroth(n) ,genhumps(n), genrose(n), nondquar(n), schmvett(n) , #=sinquad(n),=# vardim(n)]
+All_pbs = [arglina(), arglinb(), arglinc(), arwhead(), bdqrtic(), #=beale(),=# broydn7d(), #=brybnd(),=# chainwoo(), chnrosnb_mod(), cosine(), cragglvy(), dixmaane(), dixmaani(), dixmaanm(), dixon3dq(), dqdrtic(), dqrtic(), edensch(), eg2(), engval1(), errinros_mod(), #=extrosnb(),=# fletcbv2(), fletcbv3_mod(), fletchcr(),
+                      freuroth(), genhumps(), genrose(), genrose_nash(), indef_mod(), liarwhd(), morebv(), ncb20(), ncb20b(), noncvxu2(), noncvxun(), nondia(), nondquar(), NZF1(), penalty2(), #=penalty3(),=# powellsg(), power(), quartc(), #=sbrybnd(),=# schmvett(), scosine(), sparsine(), sparsqur(), srosenbr(), sinquad(), tointgss(), tquartic(), tridia(), vardim(), woods()]
 
-#=All_pbs = [arglina(n), arglinb(n), arglinc(n), arwhead(n), bdqrtic(n), beale(n), broydn7d(n), brybnd(n), chainwoo(n), chnrosnb_mod(n), cosine(n), cragglvy(n), dixmaane(n), dixmaani(n), dixmaanm(n), dixon3dq(n), dqdrtic(n), dqrtic(n), edensch(n), eg2(n), engval1(n), errinros_mod(n), extrosnb(n), fletcbv2(n), fletcbv3_mod(n), fletchcr(n),
-                      freuroth(n), genhumps(n), genrose(n), genrose_nash(n), indef_mod(n), liarwhd(n), morebv(n), ncb20(n), ncb20b(n), noncvxu2(n), noncvxun(n), nondia(n), nondquar(n), NZF1(n), penalty2(n), penalty3(n), powellsg(n), power(n), quartc(n), sbrybnd(n), schmvett(n), scosine(n), sparsine(n), sparsqur(n), srosenbr(n), sinquad(n), tointgss(n), tquartic(n), tridia(n), vardim(n), woods(n)]
-=#
 
-#pb=Vardim;plot_grad_mptr(pb.cost,[0.01,0.001])
+weighting(Pbs,MPTRstruct,runNOMAD,MATLAB_path;recompute_weights=true,bb_computes_weights=true)
 
-#println(runtopt(MPTRstruct,Genhumps,[1e-1,1e-8]))
-
-metaoptimization(Pbs,MPTRstruct,runNOMAD,MATLAB_path;pre_heuristic=true,maxFactor=5,penaltyFactor=1,admitted_failure=0.2)
+metaoptimization(Pbs,MPTRstruct,runNOMAD,MATLAB_path; pre_heuristic=true,
+                            maxFactor=10, penaltyFactor=2,admitted_failure=1)
