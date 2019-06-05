@@ -60,7 +60,13 @@ All_pbs = [arglina(), arglinb(), arglinc(), arwhead(), bdqrtic(), #=beale(),=# b
                       freuroth(), genhumps(), genrose(), genrose_nash(), indef_mod(), liarwhd(), morebv(), ncb20(), ncb20b(), noncvxu2(), noncvxun(), nondia(), nondquar(), NZF1(), penalty2(), #=penalty3(),=# powellsg(), power(), quartc(), #=sbrybnd(),=# schmvett(), scosine(), sparsine(), sparsqur(), srosenbr(), sinquad(), tointgss(), tquartic(), tridia(), vardim(), woods()]
 
 
-weighting(Pbs,MPTRstruct,runNOMAD,MATLAB_path;recompute_weights=true,bb_computes_weights=true)
+#weighting(All_bs,MPTRstruct,runNOMAD,MATLAB_path;recompute_weights=true,bb_computes_weights=true)
 
-metaoptimization(Pbs,MPTRstruct,runNOMAD,MATLAB_path; pre_heuristic=true,
-                            maxFactor=10, penaltyFactor=2,admitted_failure=1)
+#metaoptimization(All_pbs,MPTRstruct,runNOMAD,MATLAB_path; penaltyFactor=0, pre_heuristic=false,admitted_failure=0.2,load_dict="weightCalls.csv")
+
+using CSV
+df=CSV.read("weightCalls.csv")
+MPTRstruct.weightCalls=Dict(String.(df[:,1]) .=> Int.(df[:,2]))
+tpb = tuningProblem(MPTRstruct,All_pbs;penaltyFactor=0,admitted_failure=0.5)
+@time println(tpb.f([1e-3,1e-8]))
+@time println(tpb.f([1e-3,1e-8]))
