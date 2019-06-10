@@ -1,4 +1,4 @@
-using CSV
+include("latinHypercube.jl")
 
 """
 
@@ -9,7 +9,7 @@ metaoptimization(Pbs::Vector{AbstractNLPModel},solver::tunedOptimizer,runBBoptim
 
 Run NOMAD.jl on a unique black box function  that computes the average number of function calls required by `Solver` to optimize all problems
 from `Pbs`. Before then, several preliminary heuristics are launched. First, one is launched on each problem that does not have
-a weight specified in `solver.weightCalls` in order to guess it. Then, another heuristic is launched on the global problem to determine a
+a weight specified in `solver.weightPerf` in order to guess it. Then, another heuristic is launched on the global problem to determine a
 good initialization point along with a bounding box for the optimization.
 
 # **Arguments** :
@@ -62,7 +62,7 @@ false by default
 - `recompute_weights::Bool`
 
 If true, a preliminary heuristic is launched on each problem to approximate their weights even if they are already specified
-in `solver.weightCalls`.
+in `solver.weightPerf`.
 false by default
 
 - `pre_heuristic::Bool`
@@ -85,15 +85,11 @@ point will be the attribute hyperparam_low_bound from the tunedOptimizer object 
 set an upper bound for the optimization. It will not be used if pre_heursitic=true. By default, and if pre_heuristic=false, the initialization
 point will be the attribute hyperparam_up_bound from the tunedOptimizer object provided as input.
 
-- `maxFactor::Number`
-
-A NLP model optimization will be considered as failed if the number of function calls exceed maxFactor*weightCalls.
-
-- `penaltyFactor::Number`
+- `penalty::Number`
 
 During the calculation of the global cost that sums all function calls from the different testProblems, if an optimization fails, the product
-penaltyFactor*maxFactor is added to the sum instead of the weighted number of function calls. This boils down to add penaltyFactor*maxCalls
-and then to weight it. If penaltyFactor is set to 0, when a problem fails, it is not counted in the average.
+penalty*maxFactor is added to the sum instead of the weighted number of function calls. This boils down to add penalty*maxCalls
+and then to weight it. If penalty is set to 0, when a problem fails, it is not counted in the average.
 
 - `admitted_failure::Number`
 
@@ -112,30 +108,28 @@ If one of the constraints is not strictly positive, then the objective function 
 
 - `save_dict::String`
 
-If it is a valid .csv file name, data from solver.weightCalls will be saved in a .csv file with the given name.
-`"weightCalls.csv"` by default.
+If it is a valid .csv file name, data from solver.weightPerf will be saved in a .csv file with the given name.
+`"weightPerf.csv"` by default.
 
 - `load_dict::String`
 
-If it is a valid existing .csv file name, solver.weightCalls is replaced with the data from this file at the beginning of the process.
+If it is a valid existing .csv file name, solver.weightPerf is replaced with the data from this file at the beginning of the process.
 `""` by default.
 
 """
 
-function metaoptimization(Pbs::Vector{T},solver::tunedOptimizer,runBBoptimizer::Function,data_path::String;
-                            grid::Int=20, log::Bool=true,pre_heuristic::Bool=true,
+function metaoptimization(Pbs::Vector{T},solver::tunedOptimizer,runBBoptimizer::Function;
+                            grid::Int=20, lhs::Bool=true,logarithm::Bool=false,
                             hyperparam_x0=Vector{Number}(),hyperparam_lb=Vector{Number}(), hyperparam_ub=Vector{Number}(),
-                            maxFactor::Number=Inf, penaltyFactor::Number=0,admitted_failure::Number=0.0,
+                            penalty::Number=0,admitted_failure::Number=0.0,
                             opportunistic_cstr::Bool=true,load_dict::String="") where T<:AbstractNLPModel
 
-    admitted_failure>0 || (penaltyFactor=Inf)
-
-    penaltyFactor==0 || penaltyFactor>=1 || error("penaltyFactor should be superior to 1")
+    admitted_failure>0 || (penalty=Inf)
 
     if !(load_dict=="")
         try
             df=CSV.read(load_dict)
-            solver.weightCalls=Dict(String.(df[:,1]) .=> Int.(df[:,2]))
+            solver.weightPerf=Dict(String.(df[:,1]) .=> Float64.(df[:,2]))
             @info "loaded $load_dict"
         catch
             @warn "could not load $load_dict"
@@ -143,36 +137,42 @@ function metaoptimization(Pbs::Vector{T},solver::tunedOptimizer,runBBoptimizer::
     end
 
     for pb in Pbs
-        haskey(solver.weightCalls,pb.meta.name * "_$(pb.meta.nvar)") || error(pb.meta.name * "_$(pb.meta.nvar) is not in weightCalls")
+        haskey(solver.weightPerf,pb.meta.name * "_$(pb.meta.nvar)") || error(pb.meta.name * "_$(pb.meta.nvar) is not in weightPerf")
     end
 
-    if pre_heuristic
-        @info "beginning preliminary heuristic...\n"
-        tpb_csv = tuningProblem(solver,Pbs;maxFactor=maxFactor,penaltyFactor=penaltyFactor,admitted_failure=admitted_failure)
-        (hyperparam_init, minCalls, guess_low_bound, guess_up_bound) = write_csv(tpb_csv,data_path;grid=grid,log=log)
+    if lhs
+        @info "beginning lhs preliminary heuristic...\n"
+        tpb_lhs = tuningProblem(solver,Pbs;penalty=penalty,admitted_failure=admitted_failure,logarithm=logarithm)
+        (hyperparam_init, minPerf) = latinHypercube(tpb_lhs,;N=grid)
         println("initialization with hyperparameters : $hyperparam_init")
-        println("low bound used : $guess_low_bound")
-        println("up bound used : $guess_up_bound")
+        logarithm && (hyperparam_init=exp.(hyperparam_init))
         x0 = hyperparam_init
-        lvar = guess_low_bound
-        uvar = guess_up_bound
+    elseif isempty(hyperparam_x0)
+        if logarithm
+            x0=exp.((log.(solver.hyperparam_up_bound)+log.(solver.hyperparam_low_bound))/2)
+        else
+            x0=(solver.hyperparam_up_bound+solver.hyperparam_low_bound)/2
+        end
     else
-        x0 = (isempty(hyperparam_x0) ? solver.hyperparam_low_bound : hyperparam_x0)
-        lvar = (isempty(hyperparam_lb) ? solver.hyperparam_low_bound : hyperparam_lb)
-        uvar = (isempty(hyperparam_ub) ? solver.hyperparam_up_bound : hyperparam_ub)
+        x0 = hyperparam_x0
     end
 
-    tpb = tuningProblem(solver,Pbs;x0=x0,lvar=lvar,uvar=uvar,maxFactor=maxFactor,penaltyFactor=penaltyFactor,admitted_failure=admitted_failure,opportunistic_cstr=opportunistic_cstr)
+    lvar = (isempty(hyperparam_lb) ? solver.hyperparam_low_bound : hyperparam_lb)
+    uvar = (isempty(hyperparam_ub) ? solver.hyperparam_up_bound : hyperparam_ub)
+
+    tpb = tuningProblem(solver,Pbs;x0=x0,penalty=penalty,admitted_failure=admitted_failure,opportunistic_cstr=opportunistic_cstr,logarithm=logarithm)
 
     argmin=runBBoptimizer(tpb)
 
+    logarithm && (argmin=exp.(argmin))
+
     println("\nhyperparameters found after optimization : $(argmin)")
     for pb in Pbs
-        optCalls = runtopt(solver,pb,argmin)
-        if optCalls<maxFactor*solver.weightCalls[pb.meta.name * "_$(pb.meta.nvar)"]
-            println(pb.meta.name * " : $optCalls calls")
+        (optCalls,qual) = solver.run(pb,argmin)
+        if optCalls<Inf
+            println(pb.meta.name * " : $optCalls calls ; $(Int(round(qual))) of solution quality")
         else
-            println(pb.meta.name * """ : failure (maxCalls = $(maxFactor*solver.weightCalls[pb.meta.name * "_$(pb.meta.nvar)"]))""")
+            println(pb.meta.name * " : failure")
         end
     end
 

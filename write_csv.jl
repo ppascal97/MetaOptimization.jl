@@ -12,7 +12,7 @@ using CSV, DataFrames, ProgressMeter
 
 During heuristic, for a given set of hyperparameters, all problems from `Pbs` will be run and the returned function calls numbers will be sumed.
 Note that function calls numbers are inversely weighted with the minimal number of function calls of the given problem (saved in
-dictionary `solver.weightCalls`) before being sumed.
+dictionary `solver.weightPerf`) before being sumed.
 
 # **Outputs** :
 
@@ -73,7 +73,7 @@ function write_csv(tpb::tuningProblem,data_path::String;grid::Int=20,log::Bool=f
 
         p = Progress(grid^2, 0.1,"heuristic running... ")
 
-        minCalls=Inf
+        minPerf=Inf
         best_hyperparam = Vector{Float64}(undef,tpb.meta.nvar)
         guess_low_bound = []
         guess_up_bound = []
@@ -92,8 +92,8 @@ function write_csv(tpb::tuningProblem,data_path::String;grid::Int=20,log::Bool=f
 
                 column[j]=obj
 
-                if obj<minCalls
-                    minCalls=obj
+                if obj<minPerf
+                    minPerf=obj
                     best_hyperparam=[X[i],Y[j]]
                 end
 
@@ -123,7 +123,7 @@ function write_csv(tpb::tuningProblem,data_path::String;grid::Int=20,log::Bool=f
         CSV.write(joinpath(data_path,"Y" * tpb.meta.name * ".csv"),  dfY, writeheader=false)
         CSV.write(joinpath(data_path,"Z" * tpb.meta.name * ".csv"),  dfZ, writeheader=false)
 
-        return (best_hyperparam,minCalls,guess_low_bound,guess_up_bound)
+        return (best_hyperparam,minPerf,guess_low_bound,guess_up_bound)
 
     else
 

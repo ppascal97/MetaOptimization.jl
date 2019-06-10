@@ -10,26 +10,22 @@ mutable struct tunedOptimizer #{T} where T<:Function
 
                   #fonctions anonymes
 
-    weightCalls::Dict{String,Int}
+    weightPerf::Dict{String,Float64}
 
     function tunedOptimizer(run,nb_hyperparam)
         name="nonamesolver"
         hyperparam_low_bound=zeros(Float64,nb_hyperparam)
         hyperparam_up_bound=ones(Float64,nb_hyperparam)
         param_cstr=Vector{Function}()
-        weightCalls=Dict()
-        new(name,nb_hyperparam,hyperparam_low_bound,hyperparam_up_bound,param_cstr,run,weightCalls)
+        weightPerf=Dict()
+        new(name,nb_hyperparam,hyperparam_low_bound,hyperparam_up_bound,param_cstr,run,weightPerf)
     end
 end
 
-function runtopt(solver::tunedOptimizer,pb::T,x::AbstractVector; maxFactor::Number=Inf) where T<:AbstractNLPModel
-    if maxFactor<Inf
-        funcCalls=solver.run(pb,x, maxFactor*solver.weightCalls[pb.meta.name * "_$(pb.meta.nvar)"])
-    else
-        funcCalls=solver.run(pb,x, Inf)
-    end
+function runtopt(solver::tunedOptimizer,pb::T,x::AbstractVector) where T<:AbstractNLPModel
+    (funcCalls,qual)=solver.run(pb,x)
     NLPModels.reset!(pb)
-    return funcCalls
+    return funcCalls/qual
 end
 
 struct tuningProblem <: AbstractNLPModel
@@ -41,24 +37,24 @@ struct tuningProblem <: AbstractNLPModel
   opportunistic_cstr :: Bool
   post_obj_cstr :: Bool
 
-  function tuningProblem(solver::tunedOptimizer,Pbs::Vector{T};weights=true,x0=[],lvar=[],uvar=[],maxFactor=Inf,penaltyFactor=1,admitted_failure=0.0,opportunistic_cstr=true) where T<:AbstractNLPModel
+  function tuningProblem(solver::tunedOptimizer,Pbs::Vector{T};weights=true,x0=[],penalty=Inf,admitted_failure=0.0,opportunistic_cstr=true,logarithm=false) where T<:AbstractNLPModel
 
       function f(x)
-          total_calls = 0
+          total_perf = 0
           failure=0
           for pb in Pbs
-              funcCalls=runtopt(solver,pb,x;maxFactor=maxFactor)
-              if (!weights && funcCalls<Inf) || (weights && funcCalls<maxFactor*solver.weightCalls[pb.meta.name * "_$(pb.meta.nvar)"])
-                  total_calls += funcCalls/(weights ? solver.weightCalls[pb.meta.name * "_$(pb.meta.nvar)"] : 1)
-              elseif penaltyFactor==0
+              perf= (logarithm ? runtopt(solver,pb,exp.(x)) : runtopt(solver,pb,x))
+              if perf<Inf
+                  total_perf += perf/(weights ? solver.weightPerf[pb.meta.name * "_$(pb.meta.nvar)"] : 1)
+              elseif penalty==0
                   failure+=1
-              elseif maxFactor<Inf && penaltyFactor<Inf
-                  total_calls += penaltyFactor*maxFactor*(weights ? 1 : solver.weightCalls[pb.meta.name * "_$(pb.meta.nvar)"])
+              elseif penalty<Inf
+                  total_perf += penalty
               else
                   return (Inf,Inf)
               end
           end
-          return (total_calls/(length(Pbs)-(penaltyFactor>=1 ? 0 : failure)),failure/length(Pbs)-admitted_failure)
+          return (total_perf/(length(Pbs)-(penalty==0 ? failure : 0)),failure/length(Pbs)-admitted_failure)
       end
 
       function hyperparam_cstr(x)
@@ -72,14 +68,13 @@ struct tuningProblem <: AbstractNLPModel
       name = (length(Pbs)>1 ? solver.name * "_global" : solver.name * "_" * Pbs[1].meta.name * "_$(Pbs[1].meta.nvar)")
       nvar = solver.nb_hyperparam
 
+      lvar=(logarithm ? log.(solver.hyperparam_low_bound) : solver.hyperparam_low_bound)
+      uvar=(logarithm ? log.(solver.hyperparam_up_bound) : solver.hyperparam_up_bound)
+
       if isempty(x0)
-          x0=(solver.hyperparam_up_bound+solver.hyperparam_low_bound)/2
-      end
-      if isempty(lvar)
-          lvar=solver.hyperparam_low_bound
-      end
-      if isempty(uvar)
-          uvar=solver.hyperparam_up_bound
+          x0=(uvar+lvar)/2
+      else
+          x0=(logarithm ? log.(x0) : x0)
       end
 
       meta = NLPModelMeta(nvar, x0=x0, name=name, lvar=lvar, uvar=uvar)

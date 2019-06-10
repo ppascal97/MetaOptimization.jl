@@ -1,12 +1,14 @@
-function weighting(Pbs::Vector{T},solver::tunedOptimizer,runBBoptimizer::Function,data_path::String;
-                            grid::Int=20, log::Bool=true,recompute_weights::Bool=false,
-                            save_dict::String="",load_dict::String="",
-                            bb_computes_weights::Bool=false) where T<:AbstractNLPModel
+include("latinHypercube.jl")
+
+function weighting(Pbs::Vector{T},solver::tunedOptimizer,runBBoptimizer::Function;
+                            grid::Int=20, recompute_weights::Bool=false,
+                            save_dict::String="",load_dict::String="",logarithm::Bool=false,
+                            lhs::Bool=false) where T<:AbstractNLPModel
 
     if !(load_dict=="")
         try
             df=CSV.read(load_dict)
-            solver.weightCalls=Dict(String.(df[:,1]) .=> Int.(df[:,2]))
+            solver.weightPerf=Dict(String.(df[:,1]) .=> Float64.(df[:,2]))
             @info "loaded $load_dict"
         catch
             @warn "could not load $load_dict"
@@ -16,27 +18,31 @@ function weighting(Pbs::Vector{T},solver::tunedOptimizer,runBBoptimizer::Functio
     min_guess = false
     no_save_warn = false
     for pb in Pbs
-        if recompute_weights || !(haskey(solver.weightCalls,pb.meta.name * "_$(pb.meta.nvar)"))
+        if recompute_weights || !(haskey(solver.weightPerf,pb.meta.name * "_$(pb.meta.nvar)"))
             if !min_guess
-                @info "start guessing weightCalls for each problem..."
+                @info "start guessing weightPerf for each problem..."
                 min_guess=true
             end
-            tpb = tuningProblem(solver,[pb];weights=false,admitted_failure=1)
+            tpb = tuningProblem(solver,[pb];weights=false,logarithm=logarithm)
             @info "weighting $(pb.meta.name)_$(pb.meta.nvar)"
-            if bb_computes_weights
-                argmin=runBBoptimizer(tpb)
-                minCalls = runtopt(solver,pb,argmin)
-            else
-                (hyperparam_init, minCalls, guess_low_bound, guess_up_bound) = write_csv(tpb,data_path;grid=grid,log=log)
+            if lhs
+                @info "lhs running..."
+                (best_hyperparam,minPerf)=latinHypercube(tpb;N=grid)
+                logarithm && (best_hyperparam=exp.(best_hyperparam))
+                @info "lhs search found good initialization point $best_hyperparam"
+                tpb=tuningProblem(solver,[pb];weights=false,x0=best_hyperparam,logarithm=logarithm)
             end
-            if minCalls<Inf
-                solver.weightCalls[pb.meta.name * "_$(pb.meta.nvar)"]=minCalls
-                println("""weightCalls = $(solver.weightCalls[pb.meta.name * "_$(pb.meta.nvar)"])""")
+            argmin=runBBoptimizer(tpb)
+            logarithm && (argmin=exp.(argmin))
+            minPerf = runtopt(solver,pb,argmin)
+            if minPerf<Inf
+                solver.weightPerf[pb.meta.name * "_$(pb.meta.nvar)"]=minPerf
+                println("""weightPerf = $(solver.weightPerf[pb.meta.name * "_$(pb.meta.nvar)"])""")
                 if !no_save_warn
                     try
-                        CSV.write(save_dict, solver.weightCalls)
+                        CSV.write(save_dict, solver.weightPerf)
                     catch
-                        @warn "computed weightCalls will not be saved in .csv file"
+                        @warn "computed weightPerf will not be saved in .csv file"
                         no_save_warn = true
                     end
                 end
@@ -45,6 +51,6 @@ function weighting(Pbs::Vector{T},solver::tunedOptimizer,runBBoptimizer::Functio
             end
         end
     end
-    min_guess ? (@info "all weightCalls guessed.\n") : (@info "all weightCalls already available.\n")
+    min_guess ? (@info "all weightPerf guessed.\n") : (@info "all weightPerf already available.\n")
 
 end
