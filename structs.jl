@@ -37,15 +37,28 @@ struct tuningProblem <: AbstractNLPModel
   opportunistic_cstr :: Bool
   post_obj_cstr :: Bool
 
-  function tuningProblem(solver::tunedOptimizer,Pbs::Vector{T};weights=true,x0=[],penalty=Inf,admitted_failure=0.0,opportunistic_cstr=true,logarithm=false) where T<:AbstractNLPModel
+  function tuningProblem(solver::tunedOptimizer,Pbs::Vector{T};Nsgte=0,weights=true,x0=[],penalty=Inf,admitted_failure=0.0,opportunistic_cstr=true,logarithm=false) where T<:AbstractNLPModel
 
       function f(x)
+
+          if Nsgte==0
+              index=collect(1:length(Pbs))
+          else
+              avail=collect(1:length(Pbs))
+              index=Vector{Int64}(undef,Nsgte)
+              for i=1:Nsgte
+                  k=rand(1:length(avail))
+                  index[i]=avail[k]
+                  deleteat!(avail,k)
+              end
+          end
+
           total_perf = 0
           failure=0
-          for pb in Pbs
-              perf= (logarithm ? runtopt(solver,pb,exp.(x)) : runtopt(solver,pb,x))
+          for i in index
+              perf= (logarithm ? runtopt(solver,Pbs[i],exp.(x)) : runtopt(solver,Pbs[i],x))
               if perf<Inf
-                  total_perf += perf/(weights ? solver.weightPerf[pb.meta.name * "_$(pb.meta.nvar)"] : 1)
+                  total_perf += perf/(weights ? solver.weightPerf[Pbs[i].meta.name * "_$(Pbs[i].meta.nvar)"] : 1)
               elseif penalty==0
                   failure+=1
               elseif penalty<Inf
@@ -54,7 +67,7 @@ struct tuningProblem <: AbstractNLPModel
                   return (Inf,Inf)
               end
           end
-          return (total_perf/(length(Pbs)-(penalty==0 ? failure : 0)),failure/length(Pbs)-admitted_failure)
+          return (total_perf/(length(index)-(penalty==0 ? failure : 0)),failure/length(index)-admitted_failure)
       end
 
       function hyperparam_cstr(x)

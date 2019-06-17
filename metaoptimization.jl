@@ -1,3 +1,5 @@
+using CSV
+
 include("latinHypercube.jl")
 
 """
@@ -122,7 +124,11 @@ function metaoptimization(Pbs::Vector{T},solver::tunedOptimizer,runBBoptimizer::
                             grid::Int=20, lhs::Bool=true,logarithm::Bool=false,
                             hyperparam_x0=Vector{Number}(),hyperparam_lb=Vector{Number}(), hyperparam_ub=Vector{Number}(),
                             penalty::Number=0,admitted_failure::Number=0.0,
-                            opportunistic_cstr::Bool=true,load_dict::String="") where T<:AbstractNLPModel
+                            opportunistic_cstr::Bool=true,load_dict::String="",
+                            sgte_ratio::Float64=0.0,valid_pbs::Vector{T}=[]) where T<:AbstractNLPModel
+
+    sgte_num=Int(round(sgte_ratio*length(Pbs)))
+    sgte_num<length(Pbs) || error("wrong surrogate ratio")
 
     admitted_failure>0 || (penalty=Inf)
 
@@ -162,7 +168,12 @@ function metaoptimization(Pbs::Vector{T},solver::tunedOptimizer,runBBoptimizer::
 
     tpb = tuningProblem(solver,Pbs;x0=x0,penalty=penalty,admitted_failure=admitted_failure,opportunistic_cstr=opportunistic_cstr,logarithm=logarithm)
 
-    argmin=runBBoptimizer(tpb)
+    if sgte_num>0
+        tpb_sgte=tuningProblem(solver,Pbs;Nsgte=sgte_num,x0=x0,penalty=penalty,admitted_failure=admitted_failure,opportunistic_cstr=opportunistic_cstr,logarithm=logarithm)
+        (argmin,min)=runBBoptimizer(tpb;sgte=tpb_sgte)
+    else
+        (argmin,min)=runBBoptimizer(tpb)
+    end
 
     logarithm && (argmin=exp.(argmin))
 
@@ -170,12 +181,18 @@ function metaoptimization(Pbs::Vector{T},solver::tunedOptimizer,runBBoptimizer::
     for pb in Pbs
         (optCalls,qual) = solver.run(pb,argmin)
         if optCalls<Inf
-            println(pb.meta.name * " : $optCalls calls ; $(Int(round(qual))) of solution quality")
+            println(pb.meta.name * "_$(pb.meta.nvar) : $optCalls calls ; $(Int(round(qual))) of solution quality")
         else
-            println(pb.meta.name * " : failure")
+            println(pb.meta.name * "_$(pb.meta.nvar) : failure")
         end
     end
 
-    return argmin
+    if !isempty(valid_pbs)
+        @info "validation..."
+        tpb_val = tuningProblem(solver,valid_pbs;penalty=penalty,admitted_failure=admitted_failure)
+        (valid_obj,c) = objcons(tpb_val,argmin)
+        println("objective value for testing set : $min")
+        println("objective value for validation set : $valid_obj")
+    end
 
 end

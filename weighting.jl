@@ -1,3 +1,5 @@
+using CSV
+
 include("latinHypercube.jl")
 
 function weighting(Pbs::Vector{T},solver::tunedOptimizer,runBBoptimizer::Function;
@@ -32,7 +34,7 @@ function weighting(Pbs::Vector{T},solver::tunedOptimizer,runBBoptimizer::Functio
                 @info "lhs search found good initialization point $best_hyperparam"
                 tpb=tuningProblem(solver,[pb];weights=false,x0=best_hyperparam,logarithm=logarithm)
             end
-            argmin=runBBoptimizer(tpb)
+            (argmin,min)=runBBoptimizer(tpb)
             logarithm && (argmin=exp.(argmin))
             minPerf = runtopt(solver,pb,argmin)
             if minPerf<Inf
