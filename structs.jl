@@ -112,6 +112,7 @@ function NLPModels.cons(tpb::tuningProblem, x::AbstractVector)
         push!(c,cstr)
         return c
     else
+        push!(c,-1)
         return c
     end
 end
@@ -121,11 +122,18 @@ function NLPModels.objcons(tpb::tuningProblem, x::AbstractVector)
     c = tpb.hyperparam_cstr(x)
     if tpb.opportunistic_cstr
         for cstr in c
-            cstr<=0 || return (Inf, (tpb.post_obj_cstr ? push!(c,Inf) : c))
+            if cstr>0
+                push!(c,Inf)
+                return (Inf, c)
+            end
         end
     end
     NLPModels.increment!(tpb, :neval_obj)
     (obj, fail_cstr) = tpb.f(x)
-    tpb.post_obj_cstr && push!(c,fail_cstr)
+    if tpb.post_obj_cstr
+        push!(c,fail_cstr)
+    else
+        push!(c,-1)
+    end
     return (obj, c)
 end

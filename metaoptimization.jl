@@ -136,7 +136,7 @@ function metaoptimization(Pbs::Vector{T},solver::tunedOptimizer,runBBoptimizer::
         try
             df=CSV.read(load_dict)
             solver.weightPerf=Dict(String.(df[:,1]) .=> Float64.(df[:,2]))
-            @info "loaded $load_dict"
+            @info "loaded $load_dict (optimizing)"
         catch
             @warn "could not load $load_dict"
         end

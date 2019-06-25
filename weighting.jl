@@ -11,7 +11,7 @@ function weighting(Pbs::Vector{T},solver::tunedOptimizer,runBBoptimizer::Functio
         try
             df=CSV.read(load_dict)
             solver.weightPerf=Dict(String.(df[:,1]) .=> Float64.(df[:,2]))
-            @info "loaded $load_dict"
+            @info "loaded $load_dict (weighting)"
         catch
             @warn "could not load $load_dict"
         end
@@ -49,7 +49,8 @@ function weighting(Pbs::Vector{T},solver::tunedOptimizer,runBBoptimizer::Functio
                     end
                 end
             else
-                @warn "Every run from $(pb.meta.name) failed"
+                solver.weightPerf[pb.meta.name * "_$(pb.meta.nvar)"]=0
+                @warn "Every run from $(pb.meta.name) failed, it will be notified by 0 in dictionary"
             end
         end
     end
