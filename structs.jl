@@ -1,31 +1,74 @@
-mutable struct tunedOptimizer #{T} where T<:Function
+"""
+
+    tunedAlgorithm
+
+mutable struct defining the optimizer to tune. Its performance should depend on a given
+number of parameters. Also it should run on NLP models.
+
+# **Constructor** :
+
+    `solver = tunedOptimizer(run::Function,nb_param::Int)`
+
+# **Attributes** :
+
+- `nb_param::Int` :
+The number of parameters to tune
+
+-`run::Function` :
+A function of the form :
+
+    run(model<:AbstractNLPModel, param::Vector{Float})
+
+with `model` an NLP model and `param` a set of parameters. It should return an index (*Float*) measuring the performance of the run performed
+on `model` with parameters `param`. It should return `Inf` if the run failed.
+
+- `name::String` :
+A string used as a identifier
+`nonamesolver` by default
+
+- `param_low_bound::Vector{Float}` :
+A lower bound for parameters
+`zeros(Float64,nb_param)` by default.
+
+- `param_up_bound::Vector{Float}` :
+A upper bound for parameters
+`ones(Float64,nb_param)` by default.
+
+- `param_cstr::Vector{Function}`
+A set of functions defining constraints on parameters that should remain negative in the feasible set.
+These functions should take as argument a vector of length `nb_param` and return a *Float*.
+empty by default.
+
+- `weightPerf::Dict{String,Float}`
+A dictionary storing weights used to balance training problems according to their typical performance when computing
+the global cost to minimize.
+empty by default.
+
+"""
+mutable struct tunedOptimizer
 
     name::String
-    nb_hyperparam::Int64
-    hyperparam_low_bound::Vector{Float64}
-    hyperparam_up_bound::Vector{Float64}
+    nb_param::Int64
+    param_low_bound::Vector{Float64}
+    param_up_bound::Vector{Float64}
     param_cstr::Vector{Function}
-    run::Function #should take as arguments an NLP model, a vector of hyperparameters and the maximum number of function calls allowed
-                  #should return the number of function calls needed (Inf if the optimization failed)
-
-                  #fonctions anonymes
-
+    run::Function
     weightPerf::Dict{String,Float64}
 
-    function tunedOptimizer(run,nb_hyperparam)
+    function tunedOptimizer(run,nb_param)
         name="nonamesolver"
-        hyperparam_low_bound=zeros(Float64,nb_hyperparam)
-        hyperparam_up_bound=ones(Float64,nb_hyperparam)
+        param_low_bound=zeros(Float64,nb_param)
+        param_up_bound=ones(Float64,nb_param)
         param_cstr=Vector{Function}()
         weightPerf=Dict()
-        new(name,nb_hyperparam,hyperparam_low_bound,hyperparam_up_bound,param_cstr,run,weightPerf)
+        new(name,nb_param,param_low_bound,param_up_bound,param_cstr,run,weightPerf)
     end
 end
 
 function runtopt(solver::tunedOptimizer,pb::T,x::AbstractVector) where T<:AbstractNLPModel
-    (funcCalls,qual)=solver.run(pb,x)
+    perf=solver.run(pb,x)
     NLPModels.reset!(pb)
-    return funcCalls/qual
+    return perf
 end
 
 struct tuningProblem <: AbstractNLPModel
@@ -33,11 +76,10 @@ struct tuningProblem <: AbstractNLPModel
   meta :: NLPModelMeta
   counters :: Counters
   f :: Function
-  hyperparam_cstr :: Function
-  opportunistic_cstr :: Bool
-  post_obj_cstr :: Bool
+  constraint :: Function
+  admit_failure::Bool
 
-  function tuningProblem(solver::tunedOptimizer,Pbs::Vector{T};Nsgte=0,weights=true,x0=[],penalty=Inf,admitted_failure=0.0,opportunistic_cstr=true,logarithm=false) where T<:AbstractNLPModel
+  function tuningProblem(solver::tunedOptimizer,Pbs::Vector{T};Nsgte=0,weights=true,x0=[],penalty=0,admitted_failure=0.0,logarithm=false) where T<:AbstractNLPModel
 
       function f(x)
 
@@ -56,9 +98,14 @@ struct tuningProblem <: AbstractNLPModel
           total_perf = 0
           failure=0
           for i in index
-              perf= (logarithm ? runtopt(solver,Pbs[i],exp.(x)) : runtopt(solver,Pbs[i],x))
+              perf = (logarithm ? runtopt(solver,Pbs[i],exp.(x)) : runtopt(solver,Pbs[i],x))
               if perf<Inf
-                  total_perf += perf/(weights ? solver.weightPerf[Pbs[i].meta.name * "_$(Pbs[i].meta.nvar)"] : 1)
+                  if weights
+                      w = solver.weightPerf[Pbs[i].meta.name * "_$(Pbs[i].meta.nvar)"]
+                      (w == 0) || (total_perf += perf/w)
+                  else
+                      total_perf += perf
+                  end
               elseif penalty==0
                   failure+=1
               elseif penalty<Inf
@@ -70,7 +117,7 @@ struct tuningProblem <: AbstractNLPModel
           return (total_perf/(length(index)-(penalty==0 ? failure : 0)),failure/length(index)-admitted_failure)
       end
 
-      function hyperparam_cstr(x)
+      function constraint(x)
           cons = Vector{Float64}()
           for c in solver.param_cstr
               push!(cons,c(x))
@@ -79,11 +126,9 @@ struct tuningProblem <: AbstractNLPModel
       end
 
       name = (length(Pbs)>1 ? solver.name * "_global" : solver.name * "_" * Pbs[1].meta.name * "_$(Pbs[1].meta.nvar)")
-      nvar = solver.nb_hyperparam
-
-      lvar=(logarithm ? log.(solver.hyperparam_low_bound) : solver.hyperparam_low_bound)
-      uvar=(logarithm ? log.(solver.hyperparam_up_bound) : solver.hyperparam_up_bound)
-
+      nvar = solver.nb_param
+      lvar=(logarithm ? log.(solver.param_low_bound) : solver.param_low_bound)
+      uvar=(logarithm ? log.(solver.param_up_bound) : solver.param_up_bound)
       if isempty(x0)
           x0=(uvar+lvar)/2
       else
@@ -92,7 +137,7 @@ struct tuningProblem <: AbstractNLPModel
 
       meta = NLPModelMeta(nvar, x0=x0, name=name, lvar=lvar, uvar=uvar)
       counters = Counters()
-      new(meta,counters,f,hyperparam_cstr, opportunistic_cstr, (admitted_failure>0))
+      new(meta,counters,f,constraint,(admitted_failure>0))
   end
 
 end
@@ -105,8 +150,8 @@ end
 
 function NLPModels.cons(tpb::tuningProblem, x::AbstractVector)
     NLPModels.increment!(tpb, :neval_cons)
-    c = tpb.hyperparam_cstr(x)
-    if tpb.post_obj_cstr
+    c = tpb.constraints(x)
+    if tpb.admit_failure
         NLPModels.increment!(tpb, :neval_obj)
         (obj, cstr) = tpb.f(x)
         push!(c,cstr)
@@ -120,20 +165,12 @@ end
 function NLPModels.objcons(tpb::tuningProblem, x::AbstractVector)
     NLPModels.increment!(tpb, :neval_cons)
     c = tpb.hyperparam_cstr(x)
-    if tpb.opportunistic_cstr
-        for cstr in c
-            if cstr>0
-                push!(c,Inf)
-                return (Inf, c)
-            end
+    for cstr in c
+        if cstr>0
+            return (Inf, Inf)
         end
     end
     NLPModels.increment!(tpb, :neval_obj)
     (obj, fail_cstr) = tpb.f(x)
-    if tpb.post_obj_cstr
-        push!(c,fail_cstr)
-    else
-        push!(c,-1)
-    end
-    return (obj, c)
+    return (obj, fail_cstr)
 end
