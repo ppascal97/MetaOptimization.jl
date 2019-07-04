@@ -149,22 +149,18 @@ function NLPModels.obj(tpb::tuningProblem, x::AbstractVector)
 end
 
 function NLPModels.cons(tpb::tuningProblem, x::AbstractVector)
-    NLPModels.increment!(tpb, :neval_cons)
-    c = tpb.constraints(x)
     if tpb.admit_failure
         NLPModels.increment!(tpb, :neval_obj)
         (obj, cstr) = tpb.f(x)
-        push!(c,cstr)
-        return c
+        return cstr
     else
-        push!(c,-1)
-        return c
+        return -1
     end
 end
 
 function NLPModels.objcons(tpb::tuningProblem, x::AbstractVector)
     NLPModels.increment!(tpb, :neval_cons)
-    c = tpb.hyperparam_cstr(x)
+    c = tpb.constraint(x)
     for cstr in c
         if cstr>0
             return (Inf, Inf)

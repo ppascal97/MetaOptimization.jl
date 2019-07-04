@@ -5,7 +5,7 @@ include("latinHypercube.jl")
 """
 
 weighting(Pbs::Vector{AbstractNLPModel},solver::tunedOptimizer,runBBoptimizer::Function;
-                            Nlhs::Int=20, recompute_weights::Bool=false,
+                            Nlhs::Int=0, recompute_weights::Bool=false,
                             save_dict::String="",load_dict::String="",logarithm::Bool=false)
 
 Computes weights of training problems `Pbs` that will be used to balance them according to their typical performance while computing

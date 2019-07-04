@@ -5,7 +5,7 @@ include("latinHypercube.jl")
 """
 
 metaoptimization(Pbs::Vector{AbstractNLPModel},solver::tunedOptimizer,runBBoptimizer::Function;
-			                Nlhs::Int=0, logarithm::Bool=false, hyperparam_x0=Vector{Number}(),
+			                Nlhs::Int=0, logarithm::Bool=false, param_x0=Vector{Number}(),
 			                penalty::Number=0,admitted_failure::Number=0.0,load_dict::String="",
 			                sgte_ratio::Float64=0.0,valid_pbs::Vector{T}=[],weights::Bool=true)
 
@@ -59,7 +59,7 @@ More precisely, n*Nlhs sample points will be tested with n the number of paramet
 
 If true, the Latin-Hypercube search and the direct-search process will be performed with a logarithmic scale.
 
-- `hyperparam_x0::Vector{Number}`
+- `param_x0::Vector{Number}`
 
 set an initialization point for the optimization. It will not be used if Nlhs>0.
 By default, and if Nlhs==0, the initialization point will be at the center of the bounding box defined in the tunedOptimizer meta (at the
@@ -94,7 +94,7 @@ problems will be computed and displayed.
 """
 
 function metaoptimization(Pbs::Vector{T},solver::tunedOptimizer,runBBoptimizer::Function;
-                            Nlhs::Int=0, logarithm::Bool=false, hyperparam_x0=Vector{Number}(),
+                            Nlhs::Int=0, logarithm::Bool=false, param_x0=Vector{Number}(),
                             penalty::Number=0,admitted_failure::Number=0.0,load_dict::String="",
                             sgte_ratio::Float64=0.0,valid_pbs::Vector{T}=[],weights::Bool=true) where T<:AbstractNLPModel
 
@@ -116,7 +116,7 @@ function metaoptimization(Pbs::Vector{T},solver::tunedOptimizer,runBBoptimizer::
 
 		#check if all weights are available and displaying them
 		println("\nweights : ")
-		for pb in hcat(Pbs,valid_pbs)
+		for pb in vcat(Pbs,valid_pbs)
 			haskey(solver.weightPerf,pb.meta.name * "_$(pb.meta.nvar)") || error(pb.meta.name * "_$(pb.meta.nvar) is not in weightPerf")
 			println(pb.meta.name * "_$(pb.meta.nvar) : $(MPTRstruct.weightPerf[pb.meta.name * "_$(pb.meta.nvar)"])")
 		end
@@ -127,18 +127,18 @@ function metaoptimization(Pbs::Vector{T},solver::tunedOptimizer,runBBoptimizer::
     if Nlhs>0
         @info "beginning lhs preliminary heuristic...\n"
         tpb_lhs = tuningProblem(solver,Pbs;penalty=penalty,admitted_failure=admitted_failure,logarithm=logarithm,weights=weights)
-        (hyperparam_init, minPerf) = latinHypercube(tpb_lhs,;N=Nlhs)
-        println("initialization with hyperparameters : $hyperparam_init")
-		x0 = hyperparam_init
+        (param_init, minPerf) = latinHypercube(tpb_lhs,;N=Nlhs)
+        println("initialization with parameters : $param_init")
+		x0 = param_init
         logarithm && (x0=exp.(x0))
-    elseif isempty(hyperparam_x0)
+    elseif isempty(param_x0)
         if logarithm
-            x0=exp.((log.(solver.hyperparam_up_bound)+log.(solver.param_low_bound))/2)
+            x0=exp.((log.(solver.param_up_bound)+log.(solver.param_low_bound))/2)
         else
-            x0=(solver.hyperparam_up_bound+solver.param_low_bound)/2
+            x0=(solver.param_up_bound+solver.param_low_bound)/2
         end
     else
-        x0 = hyperparam_x0
+        x0 = param_x0
 		logarithm && (x0=exp.(x0))
     end
 
@@ -153,7 +153,7 @@ function metaoptimization(Pbs::Vector{T},solver::tunedOptimizer,runBBoptimizer::
     logarithm && (argmin=exp.(argmin))
 
 	#display results
-    println("\nhyperparameters found after optimization : $(argmin)")
+    println("\nparameters found after optimization : $(argmin)")
     println("weighted performances :")
     weighted_perfs=Vector{Float64}()
     for pb in Pbs

@@ -1,7 +1,5 @@
 using NOMAD
 
-MATLAB_path = "/home/pascpier/Documents/MATLAB"
-
 include("/home/pascpier/Documents/mptr/mptr_nomad.jl")
 include("structs.jl")
 include("weighting.jl")
@@ -9,9 +7,9 @@ include("metaoptimization.jl")
 include("benchmark_set.jl")
 
 #function to run mptr on a given problem
-function runMPTR1(model::T, hyperparameters) where T<:AbstractNLPModel
+function runMPTR1(model::T, parameters) where T<:AbstractNLPModel
     try
-        (solved,funcCalls,qual,gNorms,Clist)=mptr_nomad(model,hyperparameters[1],hyperparameters[2], 300000)
+        (solved,funcCalls,qual,gNorms,Clist)=mptr_nomad(model,parameters[1],parameters[2], 300000)
         return funcCalls/qual
     catch
         return Inf
@@ -19,9 +17,9 @@ function runMPTR1(model::T, hyperparameters) where T<:AbstractNLPModel
 end
 
 #function to run mptr on a given problem
-function runMPTR2(model::T, hyperparameters) where T<:AbstractNLPModel
+function runMPTR2(model::T, parameters) where T<:AbstractNLPModel
     try
-        t = @timed (solved,funcCalls,qual,gNorms,Clist)=mptr_nomad(model,hyperparameters[1],hyperparameters[2], 300000)
+        t = @timed (solved,funcCalls,qual,gNorms,Clist)=mptr_nomad(model,parameters[1],parameters[2], 300000)
         return 1000*t[2]/qual
     catch
         return Inf
@@ -29,9 +27,9 @@ function runMPTR2(model::T, hyperparameters) where T<:AbstractNLPModel
 end
 
 #function to run mptr on a given problem
-function runMPTR3(model::T, hyperparameters) where T<:AbstractNLPModel
+function runMPTR3(model::T, parameters) where T<:AbstractNLPModel
     try
-        (solved,funcCalls,qual,gNorms,Clist)=mptr_nomad(model,hyperparameters[1],hyperparameters[2], 300000)
+        (solved,funcCalls,qual,gNorms,Clist)=mptr_nomad(model,parameters[1],parameters[2], 300000)
         return funcCalls/(qual^2)
     catch
         return Inf
@@ -39,9 +37,9 @@ function runMPTR3(model::T, hyperparameters) where T<:AbstractNLPModel
 end
 
 #function to run mptr on a given problem
-function runMPTR4(model::T, hyperparameters) where T<:AbstractNLPModel
+function runMPTR4(model::T, parameters) where T<:AbstractNLPModel
     try
-        t = @timed (solved,funcCalls,qual,gNorms,Clist)=mptr_nomad(model,hyperparameters[1],hyperparameters[2], 300000)
+        t = @timed (solved,funcCalls,qual,gNorms,Clist)=mptr_nomad(model,parameters[1],parameters[2], 300000)
         return t[2]
     catch
         return Inf
@@ -49,9 +47,9 @@ function runMPTR4(model::T, hyperparameters) where T<:AbstractNLPModel
 end
 
 #function to run mptr on a given problem
-function runMPTR5(model::T, hyperparameters) where T<:AbstractNLPModel
+function runMPTR5(model::T, parameters) where T<:AbstractNLPModel
     try
-        t = @timed (solved,funcCalls,qual,gNorms,Clist)=mptr_nomad(model,hyperparameters[1],hyperparameters[2], 50000)
+        t = @timed (solved,funcCalls,qual,gNorms,Clist)=mptr_nomad(model,parameters[1],parameters[2], 50000)
         return 1000*t[2]/qual
     catch
         return Inf
@@ -133,15 +131,15 @@ Little_pbs = [arglina(2), arglinb(2), arglinc(2), arwhead(2), bdqrtic(5), beale(
                 sinquad(2), tointgss(3), tquartic(2), tridia(10), vardim(2), woods(2)]
 
 
-All_pbs = Big_pbs
+All_pbs = [arglina(2), arglinb(2), arglinc(2), arwhead(2), bdqrtic(5), beale(2), broydn7d(2)]
 
-weighting(All_pbs,MPTRstruct,runNOMAD;lhs=false,logarithm=true,recompute_weights=false,save_dict="weightPerf3.csv",load_dict="weightPerf3.csv")
+weighting(All_pbs,MPTRstruct,runNOMAD;logarithm=true,recompute_weights=false,save_dict="weightPerf3.csv",load_dict="weightPerf3.csv")
 
 (test_pbs,valid_pbs) = benchmark_set(All_pbs,MPTRstruct;valid_ratio=0.1,load_dict="weightPerf3.csv")
 
-metaoptimization(test_pbs,MPTRstruct,runNOMAD; logarithm=true,lhs=false,load_dict="weightPerf3.csv",sgte_ratio=(1/sgte_cost),valid_pbs=valid_pbs,admitted_failure=0.08)
+metaoptimization(test_pbs,MPTRstruct,runNOMAD; logarithm=true,load_dict="weightPerf3.csv",sgte_ratio=(1/sgte_cost),valid_pbs=valid_pbs,admitted_failure=0.08)
 
-ε = [0.0521233, 0.00138006]
+#ε = [0.0521233, 0.00138006]
 
 #t = @timed (solved,funcCalls,qual,gNorms,Clist) = mptr_nomad(dixmaane(3), ε[1], ε[2], 50000);println(t[2]);println(funcCalls);println(qual);plot_grad_calls(gNorms,Clist)
 
