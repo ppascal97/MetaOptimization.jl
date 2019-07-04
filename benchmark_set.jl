@@ -3,7 +3,7 @@
     benchmark_set(Pbs::Vector{AbstractNLPModels},solver::tunedOptimizer;valid_ratio=0.1,load_dict::String="",weights=true)
 
 Pick valid problems from `Pbs` (which have a strictly positive weight in `solver.weightPerf`) and randomly separate them into two sets : training
-and validation. Return a tuple (trainingProblems,validationProblems) containing two vectors of NLP models. 
+and validation. Return a tuple (trainingProblems,validationProblems) containing two vectors of NLP models.
 
 # **Arguments** :
 
