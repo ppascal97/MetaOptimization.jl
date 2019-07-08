@@ -93,10 +93,10 @@ problems will be computed and displayed.
 
 """
 
-function metaoptimization(Pbs::Vector{T},solver::tunedOptimizer,runBBoptimizer::Function;
+function metaoptimization(Pbs,solver::tunedOptimizer,runBBoptimizer::Function;
                             Nlhs::Int=0, logarithm::Bool=false, param_x0=Vector{Number}(),
                             penalty::Number=0,admitted_failure::Number=0.0,load_dict::String="",
-                            sgte_ratio::Float64=0.0,valid_pbs::Vector{T}=[],weights::Bool=true) where T<:AbstractNLPModel
+                            sgte_ratio::Float64=0.0,valid_pbs=[],weights::Bool=true)
 
     sgte_num=Int(round(sgte_ratio*length(Pbs))) #Number of problems used for surrogate
     0<=sgte_num<length(Pbs) || error("wrong surrogate ratio")
@@ -117,8 +117,10 @@ function metaoptimization(Pbs::Vector{T},solver::tunedOptimizer,runBBoptimizer::
 		#check if all weights are available and displaying them
 		println("\nweights : ")
 		for pb in vcat(Pbs,valid_pbs)
-			haskey(solver.weightPerf,pb.meta.name * "_$(pb.meta.nvar)") || error(pb.meta.name * "_$(pb.meta.nvar) is not in weightPerf")
-			println(pb.meta.name * "_$(pb.meta.nvar) : $(MPTRstruct.weightPerf[pb.meta.name * "_$(pb.meta.nvar)"])")
+			pb :: Union{T,String} where T<:AbstractNLPModel
+			pb_name = nameis(pb)
+			haskey(solver.weightPerf,pb_name) || error(pb_name * " is not in weightPerf")
+			println(pb_name * " : $(solver.weightPerf[pb_name])")
 		end
 		println()
 	end
@@ -157,12 +159,13 @@ function metaoptimization(Pbs::Vector{T},solver::tunedOptimizer,runBBoptimizer::
     println("weighted performances :")
     weighted_perfs=Vector{Float64}()
     for pb in Pbs
+		pb_name = nameis(pb)
         perf = runtopt(solver,pb,argmin)
         if perf<Inf
-            push!(weighted_perfs,perf/MPTRstruct.weightPerf[pb.meta.name * "_$(pb.meta.nvar)"])
-            println(pb.meta.name * "_$(pb.meta.nvar) : $(weighted_perfs[end])")
+            push!(weighted_perfs,perf/solver.weightPerf[pb_name])
+            println(pb_name * " : $(weighted_perfs[end])")
         else
-            println(pb.meta.name * "_$(pb.meta.nvar) : failure")
+            println(pb_name * " : failure")
         end
     end
     var = sum((weighted_perfs.-min).^2)/length(weighted_perfs) #variance
@@ -172,19 +175,20 @@ function metaoptimization(Pbs::Vector{T},solver::tunedOptimizer,runBBoptimizer::
     if !isempty(valid_pbs)
         @info "validation..."
         for pb in valid_pbs
+			pb_name = nameis(pb)
 	    	perf = runtopt(solver,pb,argmin)
 	    	if perf<Inf
-	        	push!(weighted_perfs,perf/MPTRstruct.weightPerf[pb.meta.name * "_$(pb.meta.nvar)"])
-	        	println(pb.meta.name * "_$(pb.meta.nvar) : $(weighted_perfs[end])")
+	        	push!(weighted_perfs,perf/solver.weightPerf[pb_name])
+	        	println(pb_name * " : $(weighted_perfs[end])")
 	    	else
-	        	println(pb.meta.name * "_$(pb.meta.nvar) : failure")
+	        	println(pb_name * " : failure")
 	    	end
         end
         tpb_val = tuningProblem(solver,valid_pbs;penalty=penalty,admitted_failure=admitted_failure,weights=weights)
         (valid_obj,c) = objcons(tpb_val,argmin)
         println("objective value for testing set : $min")
         println("objective value for validation set : $valid_obj")
-        println("failure constraint in validation set : $(c[end])")
+        println("failure constraint in validation set : $(c)")
     end
 
 end

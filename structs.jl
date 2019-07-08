@@ -1,3 +1,5 @@
+using Suppressor, CUTEst
+
 """
 
     tunedAlgorithm
@@ -65,9 +67,17 @@ mutable struct tunedOptimizer
     end
 end
 
-function runtopt(solver::tunedOptimizer,pb::T,x::AbstractVector) where T<:AbstractNLPModel
-    perf=solver.run(pb,x)
-    NLPModels.reset!(pb)
+function runtopt(solver::tunedOptimizer,pb,x::AbstractVector)
+    #perf = @suppress begin
+        if typeof(pb)==String
+            nlp = CUTEstModel(pb)
+            perf=solver.run(nlp,x)
+            finalize(nlp)
+        else
+            perf=solver.run(pb,x)
+        end
+        perf
+    #end
     return perf
 end
 
@@ -79,7 +89,7 @@ struct tuningProblem <: AbstractNLPModel
   constraint :: Function
   admit_failure::Bool
 
-  function tuningProblem(solver::tunedOptimizer,Pbs::Vector{T};Nsgte=0,weights=true,x0=[],penalty=0,admitted_failure=0.0,logarithm=false) where T<:AbstractNLPModel
+  function tuningProblem(solver::tunedOptimizer,Pbs;Nsgte=0,weights=true,x0=[],penalty=0,admitted_failure=0.0,logarithm=false)
 
       function f(x)
 
@@ -98,10 +108,11 @@ struct tuningProblem <: AbstractNLPModel
           total_perf = 0
           failure=0
           for i in index
+              #Pbs[i] :: Union{T,String} where T<:AbstractNLPModel
               perf = (logarithm ? runtopt(solver,Pbs[i],exp.(x)) : runtopt(solver,Pbs[i],x))
               if perf<Inf
                   if weights
-                      w = solver.weightPerf[Pbs[i].meta.name * "_$(Pbs[i].meta.nvar)"]
+                      w = solver.weightPerf[nameis(Pbs[i])]
                       (w == 0) || (total_perf += perf/w)
                   else
                       total_perf += perf
@@ -125,7 +136,7 @@ struct tuningProblem <: AbstractNLPModel
           return cons
       end
 
-      name = (length(Pbs)>1 ? solver.name * "_global" : solver.name * "_" * Pbs[1].meta.name * "_$(Pbs[1].meta.nvar)")
+      name = (length(Pbs)>1 ? solver.name * "_global" : solver.name * "_" * nameis(Pbs[1]))
       nvar = solver.nb_param
       lvar=(logarithm ? log.(solver.param_low_bound) : solver.param_low_bound)
       uvar=(logarithm ? log.(solver.param_up_bound) : solver.param_up_bound)
@@ -169,4 +180,13 @@ function NLPModels.objcons(tpb::tuningProblem, x::AbstractVector)
     NLPModels.increment!(tpb, :neval_obj)
     (obj, fail_cstr) = tpb.f(x)
     return (obj, fail_cstr)
+end
+
+function nameis(pb)
+	if typeof(pb)==String
+		pb_name = pb
+	else
+		pb_name = pb.meta.name * "_$(pb.meta.nvar)"
+	end
+	return pb_name
 end

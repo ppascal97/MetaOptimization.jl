@@ -32,7 +32,7 @@ empty by default.
 
 
 """
-function benchmark_set(Pbs::Vector{T},solver::tunedOptimizer;valid_ratio=0.1,load_dict::String="",weights=true) where T<:AbstractNLPModel
+function benchmark_set(Pbs,solver::tunedOptimizer;valid_ratio=0.1,load_dict::String="",weights=true)
 
     if weights
         #load weights dictionary
@@ -47,13 +47,15 @@ function benchmark_set(Pbs::Vector{T},solver::tunedOptimizer;valid_ratio=0.1,loa
         end
 
         #eliminate problems of which weight is null or that are not available in weightPerf
-        Pbs_avail=Vector{AbstractNLPModel}()
+        Pbs_avail=Vector{Union{AbstractNLPModel,String}}()
         for pb in Pbs
+            pb :: Union{T,String} where T<:AbstractNLPModel
+            pb_name = nameis(pb)
             weight=0
             try
-                weight=solver.weightPerf[pb.meta.name * "_$(pb.meta.nvar)"]
+                weight=solver.weightPerf[pb_name]
             catch
-                @warn "$(pb.meta.name)_$(pb.meta.nvar) is not in dictionary, it will not make part of benchmark sets"
+                @warn "$pb_name is not in dictionary, it will not make part of benchmark sets"
             end
             if weight!=0
                 push!(Pbs_avail,pb)
@@ -66,7 +68,7 @@ function benchmark_set(Pbs::Vector{T},solver::tunedOptimizer;valid_ratio=0.1,loa
 
     valid_num = Int(round(valid_ratio*NA))
     valid_num<NA || error("wrong validation ratio")
-    valid_pbs=Vector{AbstractNLPModel}()
+    valid_pbs=Vector{Union{AbstractNLPModel,String}}()
 
     for i=1:valid_num
         index=rand(1:length(Pbs_avail))
@@ -76,13 +78,13 @@ function benchmark_set(Pbs::Vector{T},solver::tunedOptimizer;valid_ratio=0.1,loa
 
     print("\ntest set : ")
     for pb in Pbs_avail
-        print("$(pb.meta.name)_$(pb.meta.nvar) ; ")
+        print("$(nameis(pb)) ; ")
     end
     println("\n")
 
     print("validation set : ")
     for pb in valid_pbs
-        print("$(pb.meta.name)_$(pb.meta.nvar) ; ")
+        print("$(nameis(pb)) ; ")
     end
     println("\n")
 

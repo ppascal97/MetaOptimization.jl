@@ -70,9 +70,9 @@ If set to true, weights will be computed even they are already available either 
 `false` by default.
 
 """
-function weighting(Pbs::Vector{T},solver::tunedOptimizer,runBBoptimizer::Function;
+function weighting(Pbs,solver::tunedOptimizer,runBBoptimizer::Function;
                             Nlhs::Int=0, recompute_weights::Bool=false,
-                            save_dict::String="",load_dict::String="",logarithm::Bool=false) where T<:AbstractNLPModel
+                            save_dict::String="",load_dict::String="",logarithm::Bool=false)
 
     #This second dictionary stores optimal parameters values
     data = Dict()
@@ -91,13 +91,15 @@ function weighting(Pbs::Vector{T},solver::tunedOptimizer,runBBoptimizer::Functio
     min_guess = false
     no_save_warn = false
     for pb in Pbs
-        if recompute_weights || !(haskey(solver.weightPerf,pb.meta.name * "_$(pb.meta.nvar)"))
+        #pb :: Union{T,String} where T<:AbstractNLPModel
+        pb_name = nameis(pb)
+        if recompute_weights || !(haskey(solver.weightPerf,pb_name))
             if !min_guess
                 @info "start guessing weightPerf for each problem..."
                 min_guess=true
             end
             tpb = tuningProblem(solver,[pb];weights=false,logarithm=logarithm,penalty=Inf)
-            @info "weighting $(pb.meta.name)_$(pb.meta.nvar)"
+            @info "weighting $pb_name"
             if Nlhs>0
                 @info "lhs running..."
                 (best_param,minPerf)=latinHypercube(tpb;N=Nlhs)
@@ -108,9 +110,9 @@ function weighting(Pbs::Vector{T},solver::tunedOptimizer,runBBoptimizer::Functio
             (argmin,minPerf)=runBBoptimizer(tpb)
             if minPerf<Inf
                 logarithm && (argmin=exp.(argmin))
-                data[pb.meta.name * "_$(pb.meta.nvar)"]=argmin
-                solver.weightPerf[pb.meta.name * "_$(pb.meta.nvar)"]=minPerf
-                println("""weightPerf = $(solver.weightPerf[pb.meta.name * "_$(pb.meta.nvar)"])""")
+                data[pb_name]=argmin
+                solver.weightPerf[pb_name]=minPerf
+                println("""weightPerf = $(solver.weightPerf[pb_name])""")
                 if !no_save_warn
                     CSV.write("data", data)
                     try
@@ -121,8 +123,8 @@ function weighting(Pbs::Vector{T},solver::tunedOptimizer,runBBoptimizer::Functio
                     end
                 end
             else
-                solver.weightPerf[pb.meta.name * "_$(pb.meta.nvar)"]=0
-                @warn "Every run from $(pb.meta.name) failed, it will be notified by 0 in dictionary"
+                solver.weightPerf[pb_name]=0
+                @warn "Every run from $pb_name failed, it will be notified by 0 in dictionary"
             end
         end
     end
