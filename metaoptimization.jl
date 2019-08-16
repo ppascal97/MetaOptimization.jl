@@ -154,22 +154,35 @@ function metaoptimization(Pbs,solver::tunedOptimizer,runBBoptimizer::Function;
     end
     logarithm && (argmin=exp.(argmin))
 
+	if isnothing(argmin) || isempty(argmin)
+		error("black box optimizer returned an empty solution")
+	end
+
 	#display results
     println("\nparameters found after optimization : $(argmin)")
-    println("weighted performances :")
-    weighted_perfs=Vector{Float64}()
+    weights ? println("final weighted performances :") : println("final performances :")
+    final_perfs=Vector{Float64}()
     for pb in Pbs
 		pb_name = nameis(pb)
         perf = runtopt(solver,pb,argmin)
         if perf<Inf
-            push!(weighted_perfs,perf/solver.weightPerf[pb_name])
-            println(pb_name * " : $(weighted_perfs[end])")
+			if weights
+				w = solver.weightPerf[pb_name]
+				push!(final_perfs,perf/w)
+			else
+				push!(final_perfs,perf)
+			end
+            println(pb_name * " : $(final_perfs[end])")
         else
             println(pb_name * " : failure")
         end
     end
-    var = sum((weighted_perfs.-min).^2)/length(weighted_perfs) #variance
-    println("variance : $var\n")
+
+	#variance
+	if length(Pbs)>1
+	    var = sum((final_perfs.-min).^2)/length(final_perfs)
+	    println("variance : $var\n")
+	end
 
 	#validation
     if !isempty(valid_pbs)
@@ -178,8 +191,13 @@ function metaoptimization(Pbs,solver::tunedOptimizer,runBBoptimizer::Function;
 			pb_name = nameis(pb)
 	    	perf = runtopt(solver,pb,argmin)
 	    	if perf<Inf
-	        	push!(weighted_perfs,perf/solver.weightPerf[pb_name])
-	        	println(pb_name * " : $(weighted_perfs[end])")
+	        	if weights
+                                w = solver.weightPerf[pb_name]
+                                push!(final_perfs,perf/w)
+                        else
+                                push!(final_perfs,perf)
+                        end
+	        	println(pb_name * " : $(final_perfs[end])")
 	    	else
 	        	println(pb_name * " : failure")
 	    	end
@@ -190,5 +208,7 @@ function metaoptimization(Pbs,solver::tunedOptimizer,runBBoptimizer::Function;
         println("objective value for validation set : $valid_obj")
         println("failure constraint in validation set : $(c)")
     end
+
+	return (argmin,min)
 
 end

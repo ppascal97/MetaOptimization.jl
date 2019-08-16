@@ -1,4 +1,4 @@
-using Suppressor, CUTEst
+using Suppressor, CUTEst, NLPModels
 
 """
 
@@ -68,16 +68,18 @@ mutable struct tunedOptimizer
 end
 
 function runtopt(solver::tunedOptimizer,pb,x::AbstractVector)
-    #perf = @suppress begin
-        if typeof(pb)==String
-            nlp = CUTEstModel(pb)
-            perf=solver.run(nlp,x)
-            finalize(nlp)
-        else
-            perf=solver.run(pb,x)
-        end
-        perf
-    #end
+    if typeof(pb)==String
+		nlp = @suppress begin
+			@info "opening CUTEst model"
+			sleep(0.5)
+        	CUTEstModel(pb)
+		end
+        perf=solver.run(nlp,x)
+        finalize(nlp)
+    else
+        perf=solver.run(pb,x)
+		NLPModels.reset!(pb)
+    end
     return perf
 end
 
@@ -110,13 +112,9 @@ struct tuningProblem <: AbstractNLPModel
           for i in index
               #Pbs[i] :: Union{T,String} where T<:AbstractNLPModel
               perf = (logarithm ? runtopt(solver,Pbs[i],exp.(x)) : runtopt(solver,Pbs[i],x))
+			  w = (weights ? solver.weightPerf[nameis(Pbs[i])] : 1)
               if perf<Inf
-                  if weights
-                      w = solver.weightPerf[nameis(Pbs[i])]
-                      (w == 0) || (total_perf += perf/w)
-                  else
-                      total_perf += perf
-                  end
+                  total_perf += perf/w
               elseif penalty==0
                   failure+=1
               elseif penalty<Inf

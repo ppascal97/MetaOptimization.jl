@@ -1,4 +1,4 @@
-using CSV
+using CSV, CUTEst
 
 include("latinHypercube.jl")
 
@@ -98,6 +98,12 @@ function weighting(Pbs,solver::tunedOptimizer,runBBoptimizer::Function;
                 @info "start guessing weightPerf for each problem..."
                 min_guess=true
             end
+            NLPneedFinalize = false
+            if typeof(pb)==String
+                @info "opening CUTEst model"
+                pb = CUTEstModel(pb)
+                NLPneedFinalize = true
+            end
             tpb = tuningProblem(solver,[pb];weights=false,logarithm=logarithm,penalty=Inf)
             @info "weighting $pb_name"
             if Nlhs>0
@@ -107,7 +113,15 @@ function weighting(Pbs,solver::tunedOptimizer,runBBoptimizer::Function;
                 @info "lhs search found good initialization point $best_param"
                 tpb=tuningProblem(solver,[pb];weights=false,x0=best_param,logarithm=logarithm,penalty=Inf)
             end
-            (argmin,minPerf)=runBBoptimizer(tpb)
+            try
+                (argmin,minPerf)=runBBoptimizer(tpb)
+            catch e
+                @warn e
+                minPerf = Inf
+            end
+            if NLPneedFinalize
+                finalize(pb)
+            end
             if minPerf<Inf
                 logarithm && (argmin=exp.(argmin))
                 data[pb_name]=argmin
@@ -124,7 +138,7 @@ function weighting(Pbs,solver::tunedOptimizer,runBBoptimizer::Function;
                 end
             else
                 solver.weightPerf[pb_name]=0
-                @warn "Every run from $pb_name failed, it will be notified by 0 in dictionary"
+                @warn "weight of problem $pb_name could not be computed because of unexpected black box optimizer error, notified 0 in dictionary"
             end
         end
     end
