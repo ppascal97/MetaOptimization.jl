@@ -1,4 +1,4 @@
-using CSV
+using CSV, Statistics
 
 include("latinHypercube.jl")
 
@@ -95,7 +95,7 @@ problems will be computed and displayed.
 
 function metaoptimization(Pbs,solver::tunedOptimizer,runBBoptimizer::Function;
                             Nlhs::Int=0, logarithm::Bool=false, param_x0=Vector{Number}(),
-                            penalty::Number=0,admitted_failure::Number=0.0,load_dict::String="",
+                            avg_ratio::Float64=1.0, admitted_failure::Number=0.0,load_dict::String="",
                             sgte_ratio::Float64=0.0,valid_pbs=[],weights::Bool=true)
 
     sgte_num=Int(round(sgte_ratio*length(Pbs))) #Number of problems used for surrogate
@@ -128,7 +128,7 @@ function metaoptimization(Pbs,solver::tunedOptimizer,runBBoptimizer::Function;
 	#generate initialization point
     if Nlhs>0
         @info "beginning lhs preliminary heuristic...\n"
-        tpb_lhs = tuningProblem(solver,Pbs;penalty=penalty,admitted_failure=admitted_failure,logarithm=logarithm,weights=weights)
+        tpb_lhs = tuningProblem(solver,Pbs;admitted_failure=admitted_failure,logarithm=logarithm,weights=weights,avg_ratio=avg_ratio)
         (param_init, minPerf) = latinHypercube(tpb_lhs,;N=Nlhs)
         println("initialization with parameters : $param_init")
 		x0 = param_init
@@ -145,9 +145,9 @@ function metaoptimization(Pbs,solver::tunedOptimizer,runBBoptimizer::Function;
     end
 
 	#launch meta-optimization process
-    tpb = tuningProblem(solver,Pbs;x0=x0,penalty=penalty,admitted_failure=admitted_failure,logarithm=logarithm,weights=weights)
+    tpb = tuningProblem(solver,Pbs;x0=x0,admitted_failure=admitted_failure,logarithm=logarithm,weights=weights,avg_ratio=avg_ratio)
     if sgte_num>0
-        tpb_sgte=tuningProblem(solver,Pbs;Nsgte=sgte_num,x0=x0,penalty=penalty,admitted_failure=admitted_failure,logarithm=logarithm,weights=weights)
+        tpb_sgte=tuningProblem(solver,Pbs;Nsgte=sgte_num,x0=x0,admitted_failure=admitted_failure,logarithm=logarithm,weights=weights,avg_ratio=avg_ratio)
         (argmin,min)=runBBoptimizer(tpb;sgte=tpb_sgte)
     else
         (argmin,min)=runBBoptimizer(tpb)
@@ -202,7 +202,7 @@ function metaoptimization(Pbs,solver::tunedOptimizer,runBBoptimizer::Function;
 	        	println(pb_name * " : failure")
 	    	end
         end
-        tpb_val = tuningProblem(solver,valid_pbs;penalty=penalty,admitted_failure=admitted_failure,weights=weights)
+        tpb_val = tuningProblem(solver,valid_pbs;admitted_failure=admitted_failure,weights=weights)
         (valid_obj,c) = objcons(tpb_val,argmin)
         println("objective value for testing set : $min")
         println("objective value for validation set : $valid_obj")

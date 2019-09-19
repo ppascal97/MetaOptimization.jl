@@ -91,7 +91,7 @@ struct tuningProblem <: AbstractNLPModel
   constraint :: Function
   admit_failure::Bool
 
-  function tuningProblem(solver::tunedOptimizer,Pbs;Nsgte=0,weights=true,x0=[],penalty=0,admitted_failure=0.0,logarithm=false)
+  function tuningProblem(solver::tunedOptimizer,Pbs;Nsgte=0,weights=true,x0=[],admitted_failure=0.0,logarithm=false,avg_ratio=1.0)
 
       function f(x)
 
@@ -107,23 +107,30 @@ struct tuningProblem <: AbstractNLPModel
               end
           end
 
-          total_perf = 0
+          perfs_list = Vector{Float64}()
           failure=0
           for i in index
               #Pbs[i] :: Union{T,String} where T<:AbstractNLPModel
               perf = (logarithm ? runtopt(solver,Pbs[i],exp.(x)) : runtopt(solver,Pbs[i],x))
 			  w = (weights ? solver.weightPerf[nameis(Pbs[i])] : 1)
               if perf<Inf
-                  total_perf += perf/w
-              elseif penalty==0
-                  failure+=1
-              elseif penalty<Inf
-                  total_perf += penalty
+                  push!(perfs_list,perf/w)
+				  println(perf/w)
               else
-                  return (Inf,Inf)
+				  println(perf)
+				  push!(perfs_list,Inf)
+                  failure+=1
               end
           end
-          return (total_perf/(length(index)-(penalty==0 ? failure : 0)),failure/length(index)-admitted_failure)
+		  sort!(perfs_list)
+		  avg_size=Int(ceil(avg_ratio*length(index)))
+		  if 1-failure/length(index)<avg_ratio
+			  while perfs_list[end]==Inf
+				  deleteat!(perfs_list,length(perfs_list))
+			  end
+			  avg_size=length(perfs_list)
+		  end
+          return (mean(perfs_list[1:avg_size]),failure/length(index)-admitted_failure)
       end
 
       function constraint(x)
