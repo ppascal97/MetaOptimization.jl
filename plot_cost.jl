@@ -35,7 +35,7 @@ Same (upper bound)
 Size of the grid used for the heuristic (the tuningProblem will be evaluated (N x N) times).
 20 by default.
 
-- `logarithm::Bool`
+- `log::Bool`
 
 If true, parameters are distributed on a logarithmic grid.
 false by default.

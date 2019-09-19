@@ -1,11 +1,13 @@
 using NOMAD, CUTEst
 
-include("/home/pascpier/Documents/mptr/mptr_nomad.jl")
-include("structs.jl")
-include("metaoptimization.jl")
-include("weighting.jl")
-include("benchmark_set.jl")
-include("test_problems.jl")
+path_to_mptr = "..."
+
+include(path_to_mptr)
+include("../structs.jl")
+include("../metaoptimization.jl")
+include("../weighting.jl")
+include("../benchmark_set.jl")
+include("../test_problems.jl")
 
 #function to run mptr on a given problem
 function runMPTR1(model::T, parameters) where T<:AbstractNLPModel
@@ -57,8 +59,6 @@ function runNOMAD(model::T;sgte=nothing) where T<:AbstractNLPModel
     end
 end
 
-T_pbs = [edensch(10), eg2(10), engval1(10), errinros_mod(10), extrosnb(10), fletcbv2(10), fletcbv3_mod(10)]
-
 L_pbs = [arglina(100), arglinb(100), arglinc(100), arwhead(1000), bdqrtic(1000), beale(1000), broydn7d(1000), brybnd(1000), chainwoo(1000), chnrosnb_mod(1000), cosine(1000), cragglvy(1000), dixmaane(1000), dixmaani(1000), dixmaanm(1000), dixon3dq(1000),
           dqdrtic(1000), dqrtic(1000), edensch(1000), eg2(1000), engval1(1000), errinros_mod(1000), extrosnb(1000), fletcbv2(1000), fletcbv3_mod(1000), fletchcr(1000), freuroth(1000), genhumps(1000), genrose(1000), genrose_nash(1000), indef_mod(1000),
           liarwhd(1000), morebv(100), ncb20b(500), noncvxu2(1000), noncvxun(1000), nondia(1000), nondquar(1000), NZF1(1000), penalty2(1000), penalty3(1000), powellsg(1000), power(10000), quartc(10000), sbrybnd(1000), schmvett(1000), scosine(1000),
@@ -85,14 +85,8 @@ Pbs= vcat(S_pbs,M_pbs)
 
 weight_dict = "MPTRweightPerfopt.csv"
 
-#weighting(Pbs,MPTRstruct,runNOMAD;logarithm=true,recompute_weights=true,save_dict=weight_dict,load_dict=weight_dict)
+weighting(Pbs,MPTRstruct,runNOMAD;logarithm=true,recompute_weights=true,save_dict=weight_dict,load_dict=weight_dict)
 
-#(test_pbs,valid_pbs) = benchmark_set(Pbs,MPTRstruct;valid_ratio=0.1,load_dict=weight_dict)
+(test_pbs,valid_pbs) = benchmark_set(Pbs,MPTRstruct;valid_ratio=0.1,load_dict=weight_dict)
 
-#metaoptimization(test_pbs,MPTRstruct,runNOMAD; logarithm=true,load_dict=weight_dict,valid_pbs=valid_pbs,admitted_failure=0.08,avg_ratio=0.8)
-
-using CSV
-df=CSV.read(weight_dict)
-MPTRstruct.weightPerf=Dict(String.(df[:,1]) .=> Float64.(df[:,2]))
-tpb = tuningProblem(MPTRstruct,Pbs;admitted_failure=0.08,avg_ratio=0.9)
-println(tpb.f([0.886, 3.7e-5]))
+metaoptimization(test_pbs,MPTRstruct,runNOMAD; logarithm=true,load_dict=weight_dict,valid_pbs=valid_pbs,admitted_failure=0.08,avg_ratio=0.8)

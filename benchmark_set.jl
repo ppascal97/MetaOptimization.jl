@@ -20,10 +20,12 @@ The solver containing the weights dictionary.
 - `weights::Bool`
 
 If false, information from weights dictionary is not taken into account.
+`true` by default.
 
 - `valid_ratio::Float`
 
 The proportion of problems used for validation among all problems
+`0.1` by default.
 
 - `load_dict::String`
 

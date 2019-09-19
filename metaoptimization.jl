@@ -4,10 +4,10 @@ include("latinHypercube.jl")
 
 """
 
-metaoptimization(Pbs::Vector{AbstractNLPModel},solver::tunedOptimizer,runBBoptimizer::Function;
-			                Nlhs::Int=0, logarithm::Bool=false, param_x0=Vector{Number}(),
-			                penalty::Number=0,admitted_failure::Number=0.0,load_dict::String="",
-			                sgte_ratio::Float64=0.0,valid_pbs::Vector{T}=[],weights::Bool=true)
+function metaoptimization(Pbs,solver::tunedOptimizer,runBBoptimizer::Function;
+                            weights::Bool=true, Nlhs::Int=0, logarithm::Bool=false, param_x0=Vector{Number}(),
+                            avg_ratio::Float64=1.0, admitted_failure::Number=0.0,load_dict::String="",
+                            sgte_ratio::Float64=0.0,valid_pbs=[])
 
 
 Run the direct-search algorithm embedded in `runBBoptimizer` to minimize the average weighted performance index returned by `Solver` after running on all problems
@@ -54,26 +54,29 @@ If set to true, the performance indexes are weighted with the values available i
 
 If strictly positive, a Latin-Hypercube search will be performed before calling the direct-search algorithm in order to find a good initialization point.
 More precisely, n*Nlhs sample points will be tested with n the number of parameters to tune.
+`0` by default.
 
 - `logarithm::Bool`
 
 If true, the Latin-Hypercube search and the direct-search process will be performed with a logarithmic scale.
+`false` by default.
 
 - `param_x0::Vector{Number}`
 
 set an initialization point for the optimization. It will not be used if Nlhs>0.
 By default, and if Nlhs==0, the initialization point will be at the center of the bounding box defined in the tunedOptimizer meta (at the
 logarithmic center if logarithm is set to true).
+empty by default.
 
-- `penalty::Number`
+- `avg_ratio::Number`
 
-If an optimization fails during the calculation of the global cost to minimize, the weighted performance index of the corresponding
-training problem is replaced by `penalty`. If penalty is set to 0, when a problem fails, it is not counted in the average.
+Proportion of performance indices used to compute the average. It is a low-pass filter, the best ones are chosen.
+`1.0` by default.
 
 - `admitted_failure::Number`
 
 proportion of failures admitted when computing global cost.
-0.0 by default.
+`0.0` by default.
 
 - `load_dict::String`
 
@@ -85,11 +88,13 @@ empty by default.
 If strictly positive, a surrogate function of type AbstractNLPModel will be provided to `runBBoptimizer` as an optional second argument (of keyword sgte).
 This surrogate approximates the global cost by randomly picking a given number of problems among all training problems and by computing their average
 weighted (or not) performance index. `sgte_ratio` correspond of the proportion of training problems that will be picked to constitute the surrogate.
+`0.0` by default
 
 - `valid_pbs::Vector{AbstractNLPModel}`
 
 Set of problems used to validate optimal parameters found by the direct-search algorithm. The average weighted (or not) performance index from validation
 problems will be computed and displayed.
+empty by default.
 
 """
 
